@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0B1120" />
+<title>Absen WFH — Pussenif</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B1120;
+    --panel:#121A2E;
+    --panel-2:#0E1526;
+    --line:#232C45;
+    --text:#EDEFF5;
+    --muted:#8891A8;
+    --gold:#D4A73C;
+    --gold-dim:#8a7431;
+    --green:#4CAF7D;
+    --red:#E2554D;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html, body{ overflow-x:hidden; }
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(900px 400px at 50% -20%, #172038 0%, transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Inter', system-ui, sans-serif;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:28px 16px 60px;
+  }
+
+  .card{
+    width:100%;
+    max-width:420px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:18px;
+    position:relative;
+    overflow:hidden;
+  }
+
+  .card-top{ padding:22px 22px 16px; }
+  .eyebrow{ display:flex; align-items:center; justify-content:space-between; }
+  .mark{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:12px;
+    color:var(--gold);
+    letter-spacing:2px;
+    text-transform:uppercase;
+    border:1px solid var(--gold-dim);
+    padding:3px 8px;
+    border-radius:3px;
+  }
+  #dayBadge{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    padding:3px 8px;
+    border-radius:999px;
+    background:var(--panel-2);
+    color:var(--muted);
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:21px;
+    margin:12px 0 2px;
+  }
+  .sub{ color:var(--muted); font-size:13px; margin:0; }
+
+  .photo-zone{ padding:0 22px; }
+  video, canvas, img.preview{
+    width:100%;
+    aspect-ratio:4/3;
+    object-fit:cover;
+    border-radius:12px;
+    margin-top:14px;
+    background:#000;
+    display:block;
+    border:1px solid var(--line);
+  }
+  canvas, img.preview{ display:none; }
+
+  /* --- garis perforasi ala tiket, aman di layar kecil karena .card overflow:hidden --- */
+  .perforation{
+    position:relative;
+    height:1px;
+    margin:20px 0;
+    border-top:2px dashed #2c3652;
+  }
+  .perforation::before, .perforation::after{
+    content:"";
+    position:absolute;
+    top:50%;
+    transform:translateY(-50%);
+    width:20px;
+    height:20px;
+    border-radius:50%;
+    background:var(--bg);
+    box-shadow: 0 0 0 1px var(--line) inset;
+  }
+  .perforation::before{ left:-10px; }
+  .perforation::after{ right:-10px; }
+
+  .fields{ padding:0 22px; }
+  label{
+    display:block;
+    font-size:11px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    margin-bottom:6px;
+    margin-top:14px;
+  }
+  select, input[type=text]{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:13px 12px;
+    border-radius:8px;
+    font-size:16px; /* >=16px biar Safari iOS gak auto-zoom */
+    font-family:'Inter', sans-serif;
+  }
+  select{
+    appearance:none;
+    -webkit-appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9'><path d='M1 1l6 6 6-6' stroke='%238891A8' stroke-width='1.6' fill='none' fill-rule='evenodd'/></svg>");
+    background-repeat:no-repeat;
+    background-position:right 14px center;
+    padding-right:34px;
+  }
+  select:focus, input[type=text]:focus{ outline:1.5px solid var(--gold-dim); }
+
+  .row{
+    display:flex;
+    gap:8px;
+    margin-top:14px;
+    padding:0 22px;
+  }
+  button{
+    flex:1;
+    padding:13px 12px;
+    min-height:46px; /* target sentuh nyaman di HP */
+    border:none;
+    border-radius:9px;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    font-family:'Inter', sans-serif;
+  }
+  .btn-primary{ background:var(--gold); color:#1a1305; }
+  .btn-secondary{ background:var(--panel-2); color:var(--text); border:1px solid var(--line); }
+  button:hover{ filter:brightness(1.07); }
+  button:disabled{ opacity:0.4; cursor:not-allowed; }
+
+  .status{
+    margin:14px 22px 22px;
+    font-size:12.5px;
+    min-height:16px;
+    line-height:1.5;
+  }
+  .status.ok{ color:var(--green); }
+  .status.err{ color:var(--red); }
+
+  /* --- stempel muncul setelah foto berhasil diambil --- */
+  .stamp{
+    position:absolute;
+    top:56px; right:30px;
+    width:70px; height:70px;
+    border:2.5px solid var(--green);
+    border-radius:50%;
+    color:var(--green);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:9.5px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    transform:rotate(-14deg);
+    line-height:1.2;
+    background:rgba(76,175,125,0.06);
+    z-index:2;
+  }
+
+  footer{
+    text-align:center;
+    color:var(--muted);
+    font-size:11.5px;
+    margin-top:16px;
+  }
+
+  @media (max-width:380px){
+    .card-top, .photo-zone, .fields, .row{ padding-left:16px; padding-right:16px; }
+    h1{ font-size:19px; }
+  }
+</style>
+</head>
+<body>
+
+<div>
+  <div class="card">
+    <div class="stamp" id="stamp">Terverifikasi<br/>Jumat</div>
+
+    <div class="card-top">
+      <div class="eyebrow">
+        <span class="mark">Registri · Pussenif</span>
+        <span id="dayBadge"></span>
+      </div>
+      <h1>Kartu Kehadiran</h1>
+      <p class="sub">Absen WFH hanya berlaku setiap hari Jumat.</p>
+    </div>
+
+    <div class="photo-zone">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas"></canvas>
+      <img id="preview" class="preview" alt="pratinjau selfie" />
+    </div>
+
+    <div class="perforation"></div>
+
+    <div class="fields">
+      <label>Nama</label>
+      <select id="nama">
+        <option value="">Memuat daftar peserta...</option>
+      </select>
+
+      <label>Status Kehadiran</label>
+      <select id="status">
+        <option value="">Memuat opsi...</option>
+      </select>
+
+      <label>Kegiatan</label>
+      <select id="kegiatan">
+        <option value="">Memuat opsi...</option>
+      </select>
+
+      <div id="kegiatanLainnyaWrap" style="display:none">
+        <label>Keterangan Kegiatan</label>
+        <input type="text" id="kegiatanCatatan" placeholder="Jelaskan kegiatan kamu..." />
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="btn-secondary" id="btnCamera">Nyalakan Kamera</button>
+      <button class="btn-secondary" id="btnCapture" disabled>Ambil Foto</button>
+    </div>
+    <div class="row">
+      <button class="btn-secondary" id="btnRetake" style="display:none">Ambil Ulang</button>
+      <button class="btn-primary" id="btnSubmit" disabled>Kirim Absen</button>
+    </div>
+
+    <div class="status" id="statusMsg"></div>
+  </div>
+  <footer>Registri Absen WFH · Pussenif</footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Registri Absen — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B1120;
+    --panel:#121A2E;
+    --panel-2:#0E1526;
+    --line:#232C45;
+    --text:#EDEFF5;
+    --muted:#8891A8;
+    --gold:#D4A73C;
+    --gold-dim:#8a7431;
+    --green:#4CAF7D;
+    --red:#E2554D;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 500px at 10% -10%, #172038 0%, transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Inter', system-ui, sans-serif;
+  }
+  header{
+    padding:32px 40px 20px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand .mark{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:15px;
+    color:var(--gold);
+    letter-spacing:2px;
+    text-transform:uppercase;
+    border:1px solid var(--gold-dim);
+    padding:3px 9px;
+    border-radius:3px;
+  }
+  header h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:24px;
+    margin:0;
+    letter-spacing:0.2px;
+  }
+  header p{
+    margin:2px 0 0;
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  main{ padding:24px 40px 60px; max-width:1200px; margin:0 auto; }
+
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    gap:14px;
+    margin-bottom:22px;
+  }
+  .stat{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:16px 18px;
+  }
+  .stat .num{
+    font-family:'Fraunces', serif;
+    font-size:30px;
+    font-weight:600;
+    color:var(--gold);
+    line-height:1;
+  }
+  .stat .lbl{
+    color:var(--muted);
+    font-size:12px;
+    margin-top:6px;
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    overflow:hidden;
+  }
+  .toolbar{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    padding:16px 18px;
+    border-bottom:1px solid var(--line);
+    flex-wrap:wrap;
+  }
+  input, button{
+    font-family:'Inter', sans-serif;
+    font-size:13.5px;
+  }
+  input[type=password], input[type=text], input[type=date]{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:9px 12px;
+    border-radius:8px;
+  }
+  input[type=password]{ width:180px; }
+  input[type=text]{ width:200px; }
+  button{
+    background:var(--gold);
+    color:#1a1305;
+    border:none;
+    padding:9px 16px;
+    border-radius:8px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  button.ghost{
+    background:transparent;
+    color:var(--text);
+    border:1px solid var(--line);
+    font-weight:500;
+  }
+  button:hover{ filter:brightness(1.06); }
+  button:disabled{ opacity:0.4; cursor:not-allowed; }
+  .spacer{ flex:1; }
+  .status{ font-size:12.5px; color:var(--muted); }
+
+  table{ width:100%; border-collapse:collapse; }
+  th, td{
+    text-align:left;
+    padding:12px 18px;
+    border-bottom:1px solid var(--line);
+    font-size:13.5px;
+  }
+  th{
+    color:var(--muted);
+    font-weight:600;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+    background:var(--panel-2);
+  }
+  tr:hover td{ background:#151d33; }
+
+  .who{ display:flex; align-items:center; gap:12px; }
+  .thumb-wrap{ position:relative; width:46px; height:46px; flex:none; }
+  img.thumb{
+    width:46px; height:46px;
+    object-fit:cover;
+    border-radius:8px;
+    border:1px solid var(--line);
+    display:block;
+  }
+  .stamp{
+    position:absolute;
+    top:-8px; right:-10px;
+    width:22px; height:22px;
+    border-radius:50%;
+    background:var(--green);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:12px;
+    border:2px solid var(--panel);
+  }
+  .nama{ font-weight:600; }
+  .waktu{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--muted); }
+  a.maplink{
+    color:var(--gold);
+    text-decoration:none;
+    font-size:12.5px;
+    font-weight:500;
+  }
+  a.maplink:hover{ text-decoration:underline; }
+
+  .pagination{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:14px 18px;
+    border-top:1px solid var(--line);
+  }
+  .pagination .info{ color:var(--muted); font-size:12.5px; margin-right:auto; }
+
+  .empty{ color:var(--muted); padding:50px 0; text-align:center; font-size:14px; }
+  .locked{ padding:60px 20px; text-align:center; }
+  .locked .mark-lg{
+    font-family:'Fraunces', serif;
+    font-size:15px;
+    color:var(--gold);
+    letter-spacing:3px;
+    text-transform:uppercase;
+    margin-bottom:8px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="mark">Registri</span>
+    <div>
+      <h1>Dashboard Absen WFH</h1>
+      <p>Rekap kehadiran hari Jumat — foto, waktu, dan titik lokasi tiap check-in.</p>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <div id="lockedView" class="panel locked">
+    <div class="mark-lg">Akses Terbatas</div>
+    <p style="color:var(--muted); margin-bottom:18px;">Masukkan kunci admin untuk membuka registri.</p>
+    <input type="password" id="adminKeyLocked" placeholder="Kunci admin" style="width:240px" />
+    <button onclick="unlock()">Buka</button>
+    <div class="status" id="lockStatus" style="margin-top:10px"></div>
+  </div>
+
+  <div id="dashboardView" style="display:none">
+    <div class="stats">
+      <div class="stat"><div class="num" id="statTotal">—</div><div class="lbl">Total Absen</div></div>
+      <div class="stat"><div class="num" id="statHariIni">—</div><div class="lbl">Absen Hari Ini</div></div>
+      <div class="stat"><div class="num" id="statOrang">—</div><div class="lbl">Orang Terdaftar</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="toolbar">
+        <input type="text" id="search" placeholder="Cari nama..." />
+        <input type="date" id="tanggal" />
+        <button class="ghost" onclick="resetFilter()">Reset</button>
+        <div class="spacer"></div>
+        <span class="status" id="status"></span>
+        <button class="ghost" onclick="exportCsv()">Export CSV</button>
+      </div>
+
+      <table id="table">
+        <thead>
+          <tr>
+            <th>Peserta</th>
+            <th>Waktu Absen</th>
+            <th>Status</th>
+            <th>Kegiatan</th>
+            <th>Lokasi</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="emptyMsg" style="display:none">Tidak ada data yang cocok.</div>
+
+      <div class="pagination">
+        <span class="info" id="pageInfo"></span>
+        <button class="ghost" id="prevBtn" onclick="changePage(-1)">← Sebelumnya</button>
+        <button class="ghost" id="nextBtn" onclick="changePage(1)">Berikutnya →</button>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="toolbar">
+        <strong style="font-size:14px">Peserta Terdaftar</strong>
+        <div class="spacer"></div>
+        <input type="text" id="pesertaBaru" placeholder="Nama lengkap peserta baru..." style="width:260px" />
+        <button onclick="tambahPeserta()">+ Tambah</button>
+      </div>
+      <table>
+        <thead><tr><th>Nama</th><th style="width:80px">Aksi</th></tr></thead>
+        <tbody id="pesertaBody"></tbody>
+      </table>
+      <div class="empty" id="pesertaEmpty" style="display:none">Belum ada peserta terdaftar.</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+async function loadPeserta(){
+  const tbody = document.getElementById('pesertaBody');
+  const empty = document.getElementById('pesertaEmpty');
+  try{
+    const res = await fetch('/api/peserta');
+    const data = await res.json();
+    tbody.innerHTML = '';
+    if(data.length === 0){
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    for(const p of data){
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${p.nama_lengkap}</td>
+        <td><button class="ghost" onclick="hapusPeserta('${p.id}')">Hapus</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }catch(e){}
+}
+
+async function tambahPeserta(){
+  const input = document.getElementById('pesertaBaru');
+  const nama_lengkap = input.value.trim();
+  if(!nama_lengkap) return;
+
+  try{
+    const res = await fetch('/api/peserta?key=' + encodeURIComponent(adminKey), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nama_lengkap }),
+    });
+    const data = await res.json();
+    if(!res.ok){
+      alert(data.error || 'Gagal menambah peserta.');
+      return;
+    }
+    input.value = '';
+    loadPeserta();
+    loadStats();
+  }catch(e){
+    alert('Gagal menambah peserta: ' + e.message);
+  }
+}
+
+async function hapusPeserta(id){
+  if(!confirm('Hapus peserta ini dari daftar?')) return;
+  try{
+    await fetch('/api/peserta/' + id + '?key=' + encodeURIComponent(adminKey), { method: 'DELETE' });
+    loadPeserta();
+    loadStats();
+  }catch(e){
+    alert('Gagal menghapus peserta: ' + e.message);
+  }
+}
+</script>
+
+<script>
+let adminKey = "";
+let page = 1;
+const limit = 25;
+let totalPages = 1;
+
+function unlock(){
+  adminKey = document.getElementById('adminKeyLocked').value.trim();
+  if(!adminKey){
+    document.getElementById('lockStatus').textContent = 'Masukkan kunci dulu.';
+    return;
+  }
+  document.getElementById('lockedView').style.display = 'none';
+  document.getElementById('dashboardView').style.display = 'block';
+  loadStats();
+  loadData();
+  loadPeserta();
+}
+
+function resetFilter(){
+  document.getElementById('search').value = '';
+  document.getElementById('tanggal').value = '';
+  page = 1;
+  loadData();
+}
+
+function changePage(delta){
+  const next = page + delta;
+  if(next < 1 || next > totalPages) return;
+  page = next;
+  loadData();
+}
+
+async function loadStats(){
+  try{
+    const res = await fetch('/api/absen/stats?key=' + encodeURIComponent(adminKey));
+    if(!res.ok) return;
+    const s = await res.json();
+    document.getElementById('statTotal').textContent = s.total;
+    document.getElementById('statHariIni').textContent = s.hariIni;
+    document.getElementById('statOrang').textContent = s.orangUnik;
+  }catch(e){}
+}
+
+async function loadData(){
+  const status = document.getElementById('status');
+  const table = document.getElementById('table');
+  const tbody = document.getElementById('tbody');
+  const emptyMsg = document.getElementById('emptyMsg');
+  const search = document.getElementById('search').value.trim();
+  const tanggal = document.getElementById('tanggal').value;
+
+  status.textContent = 'Memuat...';
+
+  const params = new URLSearchParams({ key: adminKey, page, limit });
+  if(search) params.set('search', search);
+  if(tanggal) params.set('tanggal', tanggal);
+
+  try{
+    const res = await fetch('/api/absen?' + params.toString());
+    if(res.status === 401){
+      status.textContent = 'Kunci admin salah.';
+      document.getElementById('dashboardView').style.display = 'none';
+      document.getElementById('lockedView').style.display = 'block';
+      return;
+    }
+    const { data, total, totalPages: tp } = await res.json();
+    totalPages = tp;
+    tbody.innerHTML = '';
+
+    if(data.length === 0){
+      table.style.display = 'none';
+      emptyMsg.style.display = 'block';
+    } else {
+      emptyMsg.style.display = 'none';
+      table.style.display = 'table';
+      for(const row of data){
+        const tr = document.createElement('tr');
+        const waktu = new Date(row.waktu).toLocaleString('id-ID', { dateStyle:'medium', timeStyle:'short' });
+        const statusColor = (row.status === 'WFH') ? 'var(--green)' : (row.status === 'Di kantor' ? 'var(--muted)' : 'var(--red)');
+        const kegiatanText = (row.kegiatan === 'Lainnya' && row.kegiatan_catatan)
+          ? `${row.kegiatan} — ${row.kegiatan_catatan}`
+          : (row.kegiatan || '-');
+        tr.innerHTML = `
+          <td>
+            <div class="who">
+              <div class="thumb-wrap">
+                <img class="thumb" src="${row.foto_url}" alt="selfie" />
+                <div class="stamp">✓</div>
+              </div>
+              <span class="nama">${row.nama}</span>
+            </div>
+          </td>
+          <td class="waktu">${waktu}</td>
+          <td><span style="color:${statusColor}; font-weight:600; font-size:12.5px">${row.status || '-'}</span></td>
+          <td style="max-width:220px; font-size:12.5px">${kegiatanText}</td>
+          <td><a class="maplink" target="_blank" href="https://www.google.com/maps?q=${row.lat},${row.lng}">Lihat di peta ↗</a></td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    document.getElementById('pageInfo').textContent = `${total} total · Halaman ${page} dari ${totalPages}`;
+    document.getElementById('prevBtn').disabled = page <= 1;
+    document.getElementById('nextBtn').disabled = page >= totalPages;
+    status.textContent = '';
+  }catch(err){
+    status.textContent = 'Gagal memuat: ' + err.message;
+  }
+}
+
+function exportCsv(){
+  const search = document.getElementById('search').value.trim();
+  const tanggal = document.getElementById('tanggal').value;
+  const params = new URLSearchParams({ key: adminKey });
+  if(search) params.set('search', search);
+  if(tanggal) params.set('tanggal', tanggal);
+  window.open('/api/absen/export?' + params.toString(), '_blank');
+}
+
+document.getElementById('search').addEventListener('input', () => { page = 1; loadData(); });
+document.getElementById('tanggal').addEventListener('change', () => { page = 1; loadData(); });
+</script>
+
+</body>
+</html>
