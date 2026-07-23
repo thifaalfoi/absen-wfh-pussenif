@@ -2,7 +2,6 @@ const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const preview = document.getElementById("preview");
 const namaInput = document.getElementById("nama");
-const statusInput = document.getElementById("status");
 const kegiatanInput = document.getElementById("kegiatan");
 const kegiatanCatatanWrap = document.getElementById("kegiatanLainnyaWrap");
 const kegiatanCatatanInput = document.getElementById("kegiatanCatatan");
@@ -16,6 +15,14 @@ const stampEl = document.getElementById("stamp");
 const locBadge = document.getElementById("locBadge");
 const locText = document.getElementById("locText");
 const btnRetryLoc = document.getElementById("btnRetryLoc");
+const intro = document.getElementById("intro");
+const mainApp = document.getElementById("mainApp");
+const btnMulai = document.getElementById("btnMulai");
+
+btnMulai.addEventListener("click", () => {
+  intro.style.display = "none";
+  mainApp.style.display = "block";
+});
 
 let stream = null;
 let capturedDataUrl = null;
@@ -67,14 +74,6 @@ async function loadOpsi() {
     const res = await fetch("/api/opsi");
     const data = await res.json();
 
-    statusInput.innerHTML = `<option value="">— pilih status —</option>`;
-    for (const s of data.status) {
-      const opt = document.createElement("option");
-      opt.value = s;
-      opt.textContent = s;
-      statusInput.appendChild(opt);
-    }
-
     kegiatanInput.innerHTML = `<option value="">— pilih kegiatan —</option>`;
     for (const k of data.kegiatan) {
       const opt = document.createElement("option");
@@ -83,7 +82,7 @@ async function loadOpsi() {
       kegiatanInput.appendChild(opt);
     }
   } catch (err) {
-    setStatus("Gagal memuat opsi status/kegiatan: " + err.message, "err");
+    setStatus("Gagal memuat daftar kegiatan: " + err.message, "err");
   }
 }
 loadOpsi();
@@ -178,16 +177,11 @@ btnRetake.addEventListener("click", () => {
 
 btnSubmit.addEventListener("click", async () => {
   const nama = namaInput.value.trim();
-  const status = statusInput.value;
   const kegiatan = kegiatanInput.value;
   const kegiatan_catatan = kegiatanCatatanInput.value.trim();
 
   if (!nama) {
     setStatus("Pilih nama kamu dulu ya.", "err");
-    return;
-  }
-  if (!status) {
-    setStatus("Pilih status kehadiran dulu.", "err");
     return;
   }
   if (!kegiatan) {
@@ -220,7 +214,6 @@ btnSubmit.addEventListener("click", async () => {
         lat: currentPosition.lat,
         lng: currentPosition.lng,
         akurasi: currentPosition.akurasi,
-        status,
         kegiatan,
         kegiatan_catatan,
       }),
@@ -233,7 +226,11 @@ btnSubmit.addEventListener("click", async () => {
       return;
     }
 
-    setStatus("Absen berhasil dikirim! Terima kasih.", "ok");
+    if (data.terlambat === "Ya") {
+      setStatus("Absen berhasil dikirim — tercatat TERLAMBAT (lewat jam 08.00).", "err");
+    } else {
+      setStatus("Absen berhasil dikirim, tepat waktu. Terima kasih.", "ok");
+    }
   } catch (err) {
     setStatus("Tidak bisa terhubung ke server: " + err.message, "err");
     btnSubmit.disabled = false;

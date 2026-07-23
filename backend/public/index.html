@@ -73,6 +73,20 @@
     font-size:21px;
     margin:12px 0 2px;
   }
+  .brand-row{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin-top:10px;
+  }
+  .brand-logo{
+    width:52px;
+    height:auto;
+    flex:none;
+    filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+  }
+  .brand-row h1{ margin:0 0 2px; }
+  .brand-row .sub{ margin:0; }
   .sub{ color:var(--muted); font-size:13px; margin:0; }
 
   .photo-zone{ padding:0 22px; }
@@ -241,6 +255,62 @@
     margin-top:16px;
   }
 
+  .intro{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:32px;
+    gap:6px;
+    animation:fadeIn 0.4s ease;
+  }
+  .intro-logo{
+    width:100px;
+    height:auto;
+    margin-bottom:14px;
+    filter:drop-shadow(0 4px 10px rgba(0,0,0,0.5));
+  }
+  .intro-eyebrow{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:12px;
+    color:var(--gold);
+    letter-spacing:2px;
+    text-transform:uppercase;
+    border:1px solid var(--gold-dim);
+    padding:4px 10px;
+    border-radius:3px;
+    margin-bottom:10px;
+  }
+  .intro-title{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:32px;
+    margin:0 0 10px;
+  }
+  .intro-sub{
+    color:var(--muted);
+    font-size:14px;
+    max-width:320px;
+    line-height:1.6;
+    margin:0 0 28px;
+  }
+  .intro-btn{
+    background:var(--gold);
+    color:#1a1305;
+    border:none;
+    padding:14px 32px;
+    border-radius:10px;
+    font-weight:700;
+    font-size:15px;
+    cursor:pointer;
+    font-family:'Inter', sans-serif;
+  }
+  .intro-btn:hover{ filter:brightness(1.07); }
+  @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
+
   @media (max-width:380px){
     .card-top, .photo-zone, .fields, .row{ padding-left:16px; padding-right:16px; }
     h1{ font-size:19px; }
@@ -249,6 +319,15 @@
 </head>
 <body>
 
+<div class="intro" id="intro">
+  <img src="/logo.png" alt="Logo Yudha Wastu Pramuka" class="intro-logo" />
+  <span class="intro-eyebrow">Registri · Pussenif</span>
+  <h1 class="intro-title">Absen WFH</h1>
+  <p class="intro-sub">Kehadiran kerja dari rumah — diverifikasi lewat selfie dan lokasi, setiap hari Jumat pukul 06.30–08.00.</p>
+  <button id="btnMulai" class="intro-btn">Mulai Absen</button>
+</div>
+
+<div id="mainApp" style="display:none">
 <div>
   <div class="card">
     <div class="stamp" id="stamp">Terverifikasi<br/>Jumat</div>
@@ -258,8 +337,13 @@
         <span class="mark">Registri · Pussenif</span>
         <span id="dayBadge"></span>
       </div>
-      <h1>Kartu Kehadiran</h1>
-      <p class="sub">Absen WFH hanya berlaku setiap hari Jumat.</p>
+      <div class="brand-row">
+        <img src="/logo.png" alt="Logo Yudha Wastu Pramuka" class="brand-logo" />
+        <div>
+          <h1>Kartu Kehadiran</h1>
+          <p class="sub">Jumat, 06.30–08.00 · lewat jam 08.00 tercatat terlambat.</p>
+        </div>
+      </div>
     </div>
 
     <div class="photo-zone">
@@ -274,11 +358,6 @@
       <label>Nama</label>
       <select id="nama">
         <option value="">Memuat daftar peserta...</option>
-      </select>
-
-      <label>Status Kehadiran</label>
-      <select id="status">
-        <option value="">Memuat opsi...</option>
       </select>
 
       <label>Kegiatan</label>
@@ -312,7 +391,246 @@
   </div>
   <footer>Registri Absen WFH · Pussenif</footer>
 </div>
+</div>
 
-<script src="app.js"></script>
+<script>const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const preview = document.getElementById("preview");
+const namaInput = document.getElementById("nama");
+const kegiatanInput = document.getElementById("kegiatan");
+const kegiatanCatatanWrap = document.getElementById("kegiatanLainnyaWrap");
+const kegiatanCatatanInput = document.getElementById("kegiatanCatatan");
+const btnCamera = document.getElementById("btnCamera");
+const btnCapture = document.getElementById("btnCapture");
+const btnRetake = document.getElementById("btnRetake");
+const btnSubmit = document.getElementById("btnSubmit");
+const statusEl = document.getElementById("statusMsg");
+const dayBadge = document.getElementById("dayBadge");
+const stampEl = document.getElementById("stamp");
+const locBadge = document.getElementById("locBadge");
+const locText = document.getElementById("locText");
+const btnRetryLoc = document.getElementById("btnRetryLoc");
+const intro = document.getElementById("intro");
+const mainApp = document.getElementById("mainApp");
+const btnMulai = document.getElementById("btnMulai");
+
+btnMulai.addEventListener("click", () => {
+  intro.style.display = "none";
+  mainApp.style.display = "block";
+});
+
+let stream = null;
+let capturedDataUrl = null;
+let currentPosition = null; // { lat, lng, akurasi }
+
+const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+
+function updateDayBadge() {
+  const today = new Date();
+  const namaHari = HARI[today.getDay()];
+  dayBadge.textContent = `Hari ini: ${namaHari}`;
+  if (today.getDay() !== 5) {
+    dayBadge.style.color = "#e2554d";
+  }
+}
+updateDayBadge();
+
+function setStatus(msg, type) {
+  statusEl.textContent = msg;
+  statusEl.className = "status" + (type ? " " + type : "");
+}
+
+async function loadPeserta() {
+  namaInput.innerHTML = `<option value="">Memuat daftar peserta...</option>`;
+  try {
+    const res = await fetch("/api/peserta");
+    const data = await res.json();
+
+    namaInput.innerHTML = `<option value="">— pilih nama dari daftar peserta —</option>`;
+    for (const p of data) {
+      const opt = document.createElement("option");
+      opt.value = p.nama_lengkap;
+      opt.textContent = p.nama_lengkap;
+      namaInput.appendChild(opt);
+    }
+    if (data.length === 0) {
+      namaInput.innerHTML = `<option value="">— daftar peserta masih kosong —</option>`;
+      setStatus("Daftar peserta masih kosong. Hubungi admin untuk mendaftarkan nama.", "err");
+    }
+  } catch (err) {
+    namaInput.innerHTML = `<option value="">— gagal memuat daftar —</option>`;
+    setStatus("Gagal memuat daftar peserta: " + err.message, "err");
+  }
+}
+loadPeserta();
+
+async function loadOpsi() {
+  try {
+    const res = await fetch("/api/opsi");
+    const data = await res.json();
+
+    kegiatanInput.innerHTML = `<option value="">— pilih kegiatan —</option>`;
+    for (const k of data.kegiatan) {
+      const opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = k;
+      kegiatanInput.appendChild(opt);
+    }
+  } catch (err) {
+    setStatus("Gagal memuat daftar kegiatan: " + err.message, "err");
+  }
+}
+loadOpsi();
+
+kegiatanInput.addEventListener("change", () => {
+  kegiatanCatatanWrap.style.display = kegiatanInput.value === "Lainnya" ? "block" : "none";
+});
+
+btnCamera.addEventListener("click", async () => {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 360 } },
+      audio: false,
+    });
+    video.srcObject = stream;
+    video.style.display = "block";
+    btnCapture.disabled = false;
+    setStatus("Kamera aktif. Posisikan wajah lalu ambil foto.", "");
+
+    // Sekalian minta lokasi begitu kamera dinyalakan, biar user hanya izinkan sekali di awal
+    requestLocation();
+  } catch (err) {
+    setStatus("Gagal mengakses kamera: " + err.message + " (pastikan izin kamera diaktifkan di browser)", "err");
+  }
+});
+
+function setLocBadge(state, text) {
+  locBadge.className = "loc-badge" + (state ? " " + state : "");
+  locText.textContent = text;
+  btnRetryLoc.style.display = state === "err" ? "inline-block" : "none";
+}
+
+function requestLocation() {
+  if (!navigator.geolocation) {
+    setLocBadge("err", "Perangkat tidak mendukung geolokasi.");
+    return;
+  }
+  setLocBadge("loading", "Mendeteksi lokasi...");
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      currentPosition = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        akurasi: pos.coords.accuracy,
+      };
+      const akurasiText = pos.coords.accuracy ? ` (±${Math.round(pos.coords.accuracy)}m)` : "";
+      setLocBadge(
+        "ok",
+        `Lokasi terdeteksi: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}${akurasiText}`
+      );
+    },
+    (err) => {
+      setLocBadge("err", "Gagal mengambil lokasi: " + err.message);
+    },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+}
+
+btnRetryLoc.addEventListener("click", requestLocation);
+
+btnCapture.addEventListener("click", () => {
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  capturedDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+
+  preview.src = capturedDataUrl;
+  preview.style.display = "block";
+  video.style.display = "none";
+  btnRetake.style.display = "block";
+  btnCapture.disabled = true;
+  btnSubmit.disabled = false;
+
+  // Matikan stream kamera setelah foto diambil
+  if (stream) {
+    stream.getTracks().forEach((t) => t.stop());
+  }
+
+  stampEl.style.display = "flex";
+  setStatus("Foto berhasil diambil. Cek nama, lalu kirim absen.", "ok");
+});
+
+btnRetake.addEventListener("click", () => {
+  capturedDataUrl = null;
+  preview.style.display = "none";
+  btnRetake.style.display = "none";
+  btnSubmit.disabled = true;
+  stampEl.style.display = "none";
+  btnCamera.click();
+});
+
+btnSubmit.addEventListener("click", async () => {
+  const nama = namaInput.value.trim();
+  const kegiatan = kegiatanInput.value;
+  const kegiatan_catatan = kegiatanCatatanInput.value.trim();
+
+  if (!nama) {
+    setStatus("Pilih nama kamu dulu ya.", "err");
+    return;
+  }
+  if (!kegiatan) {
+    setStatus("Pilih kegiatan dulu.", "err");
+    return;
+  }
+  if (kegiatan === "Lainnya" && !kegiatan_catatan) {
+    setStatus("Isi keterangan kegiatan kamu.", "err");
+    return;
+  }
+  if (!capturedDataUrl) {
+    setStatus("Ambil foto selfie dulu.", "err");
+    return;
+  }
+  if (!currentPosition) {
+    setStatus("Lokasi belum didapat, tunggu sebentar atau nyalakan ulang kamera.", "err");
+    return;
+  }
+
+  btnSubmit.disabled = true;
+  setStatus("Mengirim absen...", "");
+
+  try {
+    const res = await fetch("/api/absen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nama,
+        foto: capturedDataUrl,
+        lat: currentPosition.lat,
+        lng: currentPosition.lng,
+        akurasi: currentPosition.akurasi,
+        kegiatan,
+        kegiatan_catatan,
+      }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      setStatus(data.error || "Gagal mengirim absen.", "err");
+      btnSubmit.disabled = false;
+      return;
+    }
+
+    if (data.terlambat === "Ya") {
+      setStatus("Absen berhasil dikirim — tercatat TERLAMBAT (lewat jam 08.00).", "err");
+    } else {
+      setStatus("Absen berhasil dikirim, tepat waktu. Terima kasih.", "ok");
+    }
+  } catch (err) {
+    setStatus("Tidak bisa terhubung ke server: " + err.message, "err");
+    btnSubmit.disabled = false;
+  }
+});
+</script>
 </body>
 </html>

@@ -37,7 +37,8 @@
     flex-wrap:wrap;
     gap:12px;
   }
-  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand{ display:flex; align-items:center; gap:14px; }
+  .brand-logo{ width:56px; height:auto; flex:none; filter:drop-shadow(0 2px 5px rgba(0,0,0,0.4)); }
   .brand .mark{
     font-family:'Fraunces', serif;
     font-weight:600;
@@ -66,7 +67,7 @@
 
   .stats{
     display:grid;
-    grid-template-columns:repeat(3, 1fr);
+    grid-template-columns:repeat(4, 1fr);
     gap:14px;
     margin-bottom:22px;
   }
@@ -109,7 +110,7 @@
     font-family:'Inter', sans-serif;
     font-size:13.5px;
   }
-  input[type=password], input[type=text], input[type=date]{
+  input[type=password], input[type=text], input[type=date], select{
     background:var(--panel-2);
     border:1px solid var(--line);
     color:var(--text);
@@ -211,8 +212,9 @@
 
 <header>
   <div class="brand">
-    <span class="mark">Registri</span>
+    <img src="/logo.png" alt="Logo Yudha Wastu Pramuka" class="brand-logo" />
     <div>
+      <span class="mark">Registri</span>
       <h1>Dashboard Absen WFH</h1>
       <p>Rekap kehadiran hari Jumat — foto, waktu, dan titik lokasi tiap check-in.</p>
     </div>
@@ -233,6 +235,7 @@
     <div class="stats">
       <div class="stat"><div class="num" id="statTotal">—</div><div class="lbl">Total Absen</div></div>
       <div class="stat"><div class="num" id="statHariIni">—</div><div class="lbl">Absen Hari Ini</div></div>
+      <div class="stat"><div class="num" id="statTerlambat">—</div><div class="lbl">Terlambat Hari Ini</div></div>
       <div class="stat"><div class="num" id="statOrang">—</div><div class="lbl">Orang Terdaftar</div></div>
     </div>
 
@@ -268,14 +271,45 @@
     </div>
 
     <div class="panel" style="margin-top:22px">
-      <div class="toolbar">
+      <div class="toolbar" style="flex-wrap:wrap">
         <strong style="font-size:14px">Peserta Terdaftar</strong>
         <div class="spacer"></div>
-        <input type="text" id="pesertaBaru" placeholder="Nama lengkap peserta baru..." style="width:260px" />
+        <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" style="display:none" />
+        <button class="ghost" onclick="document.getElementById('excelFile').click()">📄 Upload Excel</button>
+      </div>
+
+      <div class="toolbar" style="flex-wrap:wrap; border-top:none">
+        <input type="text" id="pesertaNama" placeholder="Nama lengkap..." style="width:200px" />
+        <input type="text" id="pesertaNrp" placeholder="NRP..." style="width:120px" />
+        <select id="pesertaJenis" style="width:90px">
+          <option value="">Jenis</option>
+          <option value="TNI">TNI</option>
+          <option value="PNS">PNS</option>
+        </select>
+        <input type="text" id="pesertaBagian" placeholder="Bagian (mis. Infolahta)..." style="width:170px" />
+        <input type="text" id="pesertaJabatan" placeholder="Jabatan..." style="width:150px" />
+        <select id="pesertaTempat" style="width:110px">
+          <option value="">Tempat</option>
+          <option value="Pussenif">Pussenif</option>
+          <option value="Pusdikif">Pusdikif</option>
+        </select>
         <button onclick="tambahPeserta()">+ Tambah</button>
       </div>
+      <div class="status" id="pesertaFormStatus" style="padding:0 18px 12px"></div>
+
       <table>
-        <thead><tr><th>Nama</th><th style="width:80px">Aksi</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Nama</th>
+            <th>NRP</th>
+            <th>Jenis</th>
+            <th>Bagian</th>
+            <th>Jabatan</th>
+            <th>Tempat</th>
+            <th>Terdaftar</th>
+            <th style="width:70px">Aksi</th>
+          </tr>
+        </thead>
         <tbody id="pesertaBody"></tbody>
       </table>
       <div class="empty" id="pesertaEmpty" style="display:none">Belum ada peserta terdaftar.</div>
@@ -284,7 +318,15 @@
 
 </main>
 
+<!-- Library baca file Excel di browser (dipakai fitur upload) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
 <script>
+function formatTanggalJam(iso){
+  if(!iso) return '-';
+  return new Date(iso).toLocaleString('id-ID', { dateStyle:'medium', timeStyle:'short' });
+}
+
 async function loadPeserta(){
   const tbody = document.getElementById('pesertaBody');
   const empty = document.getElementById('pesertaEmpty');
@@ -301,6 +343,12 @@ async function loadPeserta(){
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${p.nama_lengkap}</td>
+        <td>${p.nrp || '-'}</td>
+        <td>${p.jenis || '-'}</td>
+        <td>${p.bagian || '-'}</td>
+        <td>${p.jabatan || '-'}</td>
+        <td>${p.tempat || '-'}</td>
+        <td class="waktu">${formatTanggalJam(p.dibuat_pada)}</td>
         <td><button class="ghost" onclick="hapusPeserta('${p.id}')">Hapus</button></td>
       `;
       tbody.appendChild(tr);
@@ -308,27 +356,47 @@ async function loadPeserta(){
   }catch(e){}
 }
 
+function pesertaFormStatus(msg, ok){
+  const el = document.getElementById('pesertaFormStatus');
+  el.textContent = msg;
+  el.className = 'status' + (ok === true ? ' ok' : ok === false ? ' err' : '');
+}
+
 async function tambahPeserta(){
-  const input = document.getElementById('pesertaBaru');
-  const nama_lengkap = input.value.trim();
-  if(!nama_lengkap) return;
+  const nama_lengkap = document.getElementById('pesertaNama').value.trim();
+  const nrp = document.getElementById('pesertaNrp').value.trim();
+  const jenis = document.getElementById('pesertaJenis').value;
+  const bagian = document.getElementById('pesertaBagian').value.trim();
+  const jabatan = document.getElementById('pesertaJabatan').value.trim();
+  const tempat = document.getElementById('pesertaTempat').value;
+
+  if(!nama_lengkap){
+    pesertaFormStatus('Nama wajib diisi.', false);
+    return;
+  }
 
   try{
     const res = await fetch('/api/peserta?key=' + encodeURIComponent(adminKey), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nama_lengkap }),
+      body: JSON.stringify({ nama_lengkap, nrp, jenis, bagian, jabatan, tempat }),
     });
     const data = await res.json();
     if(!res.ok){
-      alert(data.error || 'Gagal menambah peserta.');
+      pesertaFormStatus(data.error || 'Gagal menambah peserta.', false);
       return;
     }
-    input.value = '';
+    document.getElementById('pesertaNama').value = '';
+    document.getElementById('pesertaNrp').value = '';
+    document.getElementById('pesertaJenis').value = '';
+    document.getElementById('pesertaBagian').value = '';
+    document.getElementById('pesertaJabatan').value = '';
+    document.getElementById('pesertaTempat').value = '';
+    pesertaFormStatus('Peserta "' + nama_lengkap + '" berhasil ditambahkan.', true);
     loadPeserta();
     loadStats();
   }catch(e){
-    alert('Gagal menambah peserta: ' + e.message);
+    pesertaFormStatus('Gagal menambah peserta: ' + e.message, false);
   }
 }
 
@@ -342,6 +410,71 @@ async function hapusPeserta(id){
     alert('Gagal menghapus peserta: ' + e.message);
   }
 }
+
+// ---- Upload Excel: baca file di browser (pakai SheetJS), lalu kirim ke server ----
+function cariNilaiKolom(row, kandidatNama){
+  for(const key of Object.keys(row)){
+    const keyBersih = key.toString().trim().toLowerCase();
+    if(kandidatNama.includes(keyBersih)) return row[key];
+  }
+  return '';
+}
+
+document.getElementById('excelFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+
+  pesertaFormStatus('Membaca file Excel...', null);
+
+  try{
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    if(rows.length === 0){
+      pesertaFormStatus('File Excel kosong atau formatnya tidak terbaca.', false);
+      return;
+    }
+
+    // Cocokkan nama kolom Excel (fleksibel, gak peduli besar/kecil huruf)
+    const peserta = rows.map(row => ({
+      nama_lengkap: cariNilaiKolom(row, ['nama', 'nama lengkap', 'nama_lengkap']),
+      nrp: cariNilaiKolom(row, ['nrp']),
+      jenis: cariNilaiKolom(row, ['jenis', 'tni/pns', 'status']),
+      bagian: cariNilaiKolom(row, ['bagian', 'bidang']),
+      jabatan: cariNilaiKolom(row, ['jabatan']),
+      tempat: cariNilaiKolom(row, ['tempat', 'lokasi']),
+    })).filter(p => p.nama_lengkap);
+
+    if(peserta.length === 0){
+      pesertaFormStatus('Tidak ada kolom "Nama" yang terbaca di file Excel. Pastikan ada kolom bernama "Nama".', false);
+      return;
+    }
+
+    pesertaFormStatus(`Mengunggah ${peserta.length} peserta...`, null);
+
+    const res = await fetch('/api/peserta/bulk?key=' + encodeURIComponent(adminKey), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ peserta }),
+    });
+    const data = await res.json();
+
+    if(!res.ok){
+      pesertaFormStatus(data.error || 'Gagal mengunggah data.', false);
+      return;
+    }
+
+    pesertaFormStatus(`Berhasil: ${data.ditambah} peserta ditambahkan, ${data.dilewati} dilewati (nama kosong/duplikat).`, true);
+    loadPeserta();
+    loadStats();
+  }catch(err){
+    pesertaFormStatus('Gagal membaca file: ' + err.message, false);
+  }finally{
+    e.target.value = '';
+  }
+});
 </script>
 
 <script>
@@ -384,6 +517,7 @@ async function loadStats(){
     const s = await res.json();
     document.getElementById('statTotal').textContent = s.total;
     document.getElementById('statHariIni').textContent = s.hariIni;
+    document.getElementById('statTerlambat').textContent = s.terlambatHariIni;
     document.getElementById('statOrang').textContent = s.orangUnik;
   }catch(e){}
 }
@@ -438,7 +572,10 @@ async function loadData(){
             </div>
           </td>
           <td class="waktu">${waktu}</td>
-          <td><span style="color:${statusColor}; font-weight:600; font-size:12.5px">${row.status || '-'}</span></td>
+          <td>
+            <span style="color:var(--green); font-weight:600; font-size:12.5px">${row.status || '-'}</span>
+            ${row.terlambat === 'Ya' ? '<span style="color:var(--red); font-weight:600; font-size:11px; margin-left:6px; border:1px solid var(--red); padding:1px 6px; border-radius:999px;">Terlambat</span>' : ''}
+          </td>
           <td style="max-width:220px; font-size:12.5px">${kegiatanText}</td>
           <td><a class="maplink" target="_blank" href="https://www.google.com/maps?q=${row.lat},${row.lng}">Lihat di peta ↗</a></td>
         `;
