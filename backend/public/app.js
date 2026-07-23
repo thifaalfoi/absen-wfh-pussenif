@@ -13,6 +13,9 @@ const btnSubmit = document.getElementById("btnSubmit");
 const statusEl = document.getElementById("statusMsg");
 const dayBadge = document.getElementById("dayBadge");
 const stampEl = document.getElementById("stamp");
+const locBadge = document.getElementById("locBadge");
+const locText = document.getElementById("locText");
+const btnRetryLoc = document.getElementById("btnRetryLoc");
 
 let stream = null;
 let capturedDataUrl = null;
@@ -107,11 +110,18 @@ btnCamera.addEventListener("click", async () => {
   }
 });
 
+function setLocBadge(state, text) {
+  locBadge.className = "loc-badge" + (state ? " " + state : "");
+  locText.textContent = text;
+  btnRetryLoc.style.display = state === "err" ? "inline-block" : "none";
+}
+
 function requestLocation() {
   if (!navigator.geolocation) {
-    setStatus("Perangkat tidak mendukung geolokasi.", "err");
+    setLocBadge("err", "Perangkat tidak mendukung geolokasi.");
     return;
   }
+  setLocBadge("loading", "Mendeteksi lokasi...");
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       currentPosition = {
@@ -119,13 +129,20 @@ function requestLocation() {
         lng: pos.coords.longitude,
         akurasi: pos.coords.accuracy,
       };
+      const akurasiText = pos.coords.accuracy ? ` (±${Math.round(pos.coords.accuracy)}m)` : "";
+      setLocBadge(
+        "ok",
+        `Lokasi terdeteksi: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}${akurasiText}`
+      );
     },
     (err) => {
-      setStatus("Gagal mengambil lokasi: " + err.message, "err");
+      setLocBadge("err", "Gagal mengambil lokasi: " + err.message);
     },
     { enableHighAccuracy: true, timeout: 15000 }
   );
 }
+
+btnRetryLoc.addEventListener("click", requestLocation);
 
 btnCapture.addEventListener("click", () => {
   canvas.width = video.videoWidth;

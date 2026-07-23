@@ -193,6 +193,47 @@
     z-index:2;
   }
 
+  .loc-badge{
+    margin:14px 22px 0;
+    padding:10px 12px;
+    border-radius:9px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:12.5px;
+    color:var(--muted);
+  }
+  .loc-dot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:var(--muted);
+    flex:none;
+  }
+  .loc-badge.ok{ border-color:rgba(76,175,125,0.4); color:var(--green); }
+  .loc-badge.ok .loc-dot{ background:var(--green); }
+  .loc-badge.err{ border-color:rgba(226,85,77,0.4); color:var(--red); }
+  .loc-badge.err .loc-dot{ background:var(--red); }
+  .loc-badge.loading .loc-dot{
+    background:var(--gold);
+    animation:pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  .loc-badge #btnRetryLoc{
+    margin-left:auto;
+    flex:none;
+    width:auto;
+    min-height:auto;
+    padding:5px 10px;
+    font-size:11.5px;
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--text);
+    border-radius:6px;
+  }
+
   footer{
     text-align:center;
     color:var(--muted);
@@ -255,6 +296,13 @@
       <button class="btn-secondary" id="btnCamera">Nyalakan Kamera</button>
       <button class="btn-secondary" id="btnCapture" disabled>Ambil Foto</button>
     </div>
+
+    <div class="loc-badge" id="locBadge">
+      <span class="loc-dot" id="locDot"></span>
+      <span id="locText">Lokasi belum dideteksi</span>
+      <button type="button" id="btnRetryLoc" style="display:none">Coba lagi</button>
+    </div>
+
     <div class="row">
       <button class="btn-secondary" id="btnRetake" style="display:none">Ambil Ulang</button>
       <button class="btn-primary" id="btnSubmit" disabled>Kirim Absen</button>
