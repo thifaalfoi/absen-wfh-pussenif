@@ -73,7 +73,11 @@ async function initDb() {
     await tambahKolomJikaBelumAda("peserta", "jabatan", "VARCHAR(150)");
     await tambahKolomJikaBelumAda("peserta", "tempat", "VARCHAR(50)");
     await tambahKolomJikaBelumAda("peserta", "dibuat_pada", "VARCHAR(40)");
+    await tambahKolomJikaBelumAda("peserta", "status_pensiun", "VARCHAR(20) DEFAULT 'Aktif'"); // Aktif / Pensiun
     await tambahKolomJikaBelumAda("absen", "terlambat", "VARCHAR(5)");
+
+    // Peserta lama yang kolom status_pensiun-nya masih kosong dianggap Aktif
+    await pool.query(`UPDATE peserta SET status_pensiun = 'Aktif' WHERE status_pensiun IS NULL OR status_pensiun = ''`);
 
     const [[{ c }]] = await pool.query(`SELECT COUNT(*) AS c FROM peserta`);
     if (c === 0) {
@@ -156,11 +160,34 @@ app.get("/api/opsi", (req, res) => {
   res.json({ kegiatan: KEGIATAN_OPTIONS, jenis: JENIS_OPTIONS, tempat: TEMPAT_OPTIONS });
 });
 
+// Endpoint publik: daftar peserta AKTIF saja (dipakai halaman absen buat isi dropdown nama).
+// Peserta yang sudah ditandai pensiun sengaja tidak dimunculkan di sini.
 app.get("/api/peserta", wrap(async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, dibuat_pada FROM peserta ORDER BY nama_lengkap ASC`
+    `SELECT id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, dibuat_pada
+     FROM peserta WHERE status_pensiun = 'Aktif' OR status_pensiun IS NULL
+     ORDER BY nama_lengkap ASC`
   );
   res.json(rows);
+}));
+
+// Admin: daftar SEMUA peserta (aktif maupun pensiun) buat dikelola di dashboard
+app.get("/api/peserta/admin", requireAdminKey, wrap(async (req, res) => {
+  const [rows] = await pool.query(
+    `SELECT id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, dibuat_pada, status_pensiun
+     FROM peserta ORDER BY status_pensiun ASC, nama_lengkap ASC`
+  );
+  res.json(rows);
+}));
+
+// Admin: ubah status pensiun seorang peserta (Aktif <-> Pensiun)
+app.patch("/api/peserta/:id/status", requireAdminKey, wrap(async (req, res) => {
+  const { status_pensiun } = req.body;
+  if (!["Aktif", "Pensiun"].includes(status_pensiun)) {
+    return res.status(400).json({ error: 'Status harus "Aktif" atau "Pensiun".' });
+  }
+  await pool.query(`UPDATE peserta SET status_pensiun = ? WHERE id = ?`, [status_pensiun, req.params.id]);
+  res.json({ ok: true });
 }));
 
 app.post("/api/peserta", requireAdminKey, wrap(async (req, res) => {
@@ -246,9 +273,12 @@ app.post("/api/absen", wrap(async (req, res) => {
     return res.status(400).json({ error: 'Isi keterangan kegiatan kalau memilih "Lainnya".' });
   }
 
-  const [terdaftarRows] = await pool.query(`SELECT 1 FROM peserta WHERE nama_lengkap = ?`, [nama]);
+  const [terdaftarRows] = await pool.query(
+    `SELECT 1 FROM peserta WHERE nama_lengkap = ? AND (status_pensiun = 'Aktif' OR status_pensiun IS NULL)`,
+    [nama]
+  );
   if (terdaftarRows.length === 0) {
-    return res.status(403).json({ error: "Nama tidak terdaftar sebagai peserta. Hubungi admin kalau nama kamu belum ada di daftar." });
+    return res.status(403).json({ error: "Nama tidak terdaftar sebagai peserta aktif. Hubungi admin kalau nama kamu belum ada di daftar atau sudah pensiun." });
   }
 
   if (!isFridayNow()) {
