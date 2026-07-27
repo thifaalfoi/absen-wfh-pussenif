@@ -15,8 +15,12 @@ const PORT = process.env.PORT || 3000;
 // Kunci sederhana buat lindungi dashboard admin & API GET.
 const ADMIN_KEY = process.env.ADMIN_KEY || "ganti-kunci-ini";
 
-const UPLOAD_DIR = path.join(__dirname, "uploads");
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
+// Menggunakan folder /tmp/uploads jika berjalan di lingkungan Vercel
+const uploadDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, 'uploads');
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 // Jam buka & batas tepat waktu absen (jam lokal Asia/Jakarta)
 const JAM_BUKA = { jam: 6, menit: 30 };   // 06.30 — sebelum ini absen belum dibuka
