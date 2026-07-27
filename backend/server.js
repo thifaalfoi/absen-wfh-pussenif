@@ -126,11 +126,11 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "15mb" }));
 app.use("/uploads", express.static(UPLOAD_DIR));
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "backend", "public")));
 
 // Route khusus untuk menjamin pengiriman file logo secara pasti
-app.get("/logo.png", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "logo.png"));
+app.get("/logo-pussenif.png", (req, res) => {
+  res.sendFile(path.join(__dirname, "backend", "public", "logo-pussenif.png"));
 });
 
 function waktuJakartaSekarang() {
