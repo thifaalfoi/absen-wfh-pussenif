@@ -1,5 +1,4 @@
 // server.js
-// Backend untuk aplikasi Absen WFH (selfie + lokasi) — versi database MySQL.
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -11,7 +10,6 @@ const crypto = require("crypto");
 const PORT = process.env.PORT || 3000;
 const ADMIN_KEY = process.env.ADMIN_KEY || "ganti-kunci-ini";
 
-// Folder sementara untuk Vercel Serverless vs Lokal
 const UPLOAD_DIR = process.env.VERCEL ? "/tmp/uploads" : path.join(__dirname, "uploads");
 
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -22,13 +20,9 @@ if (!fs.existsSync(UPLOAD_DIR)) {
   }
 }
 
-// Jam buka & batas tepat waktu absen (jam lokal Asia/Jakarta)
 const JAM_BUKA = { jam: 6, menit: 30 };
 const JAM_BATAS_TERLAMBAT = { jam: 8, menit: 0 };
 
-// ------------------------------------------------------------------
-// Koneksi database
-// ------------------------------------------------------------------
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   port: process.env.DB_PORT || 3306,
@@ -108,7 +102,6 @@ async function initDb() {
   }
 }
 
-// Jalankan initDb saat awal server di-load
 initDb();
 
 const KEGIATAN_OPTIONS = [
@@ -126,12 +119,9 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "15mb" }));
 app.use("/uploads", express.static(UPLOAD_DIR));
-app.use(express.static(path.join(__dirname, "backend", "public")));
 
-// Route khusus untuk menjamin pengiriman file logo secara pasti
-app.get("/logo-pussenif.png", (req, res) => {
-  res.sendFile(path.join(__dirname, "backend", "public", "logo-pussenif.png"));
-});
+// PANGGILAN STATIC UTAMA: Mengarah langsung ke folder public
+app.use(express.static(path.join(__dirname, "public")));
 
 function waktuJakartaSekarang() {
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
@@ -380,12 +370,10 @@ app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "admin.html"));
 });
 
-// Jalankan server lokal jika tidak berjalan di lingkungan Vercel
 if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`Server absen jalan di http://localhost:${PORT}`);
   });
 }
 
-// WAJIB DILAKUKAN UNTUK VERCEL SERVERLESS:
 module.exports = app;
