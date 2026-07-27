@@ -128,6 +128,11 @@ app.use(express.json({ limit: "15mb" }));
 app.use("/uploads", express.static(UPLOAD_DIR));
 app.use(express.static(path.join(__dirname, "public")));
 
+// Route khusus untuk menjamin pengiriman file logo secara pasti
+app.get("/logo.png", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "logo.png"));
+});
+
 function waktuJakartaSekarang() {
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
   const yyyy = now.getFullYear();
