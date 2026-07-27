@@ -394,4 +394,5 @@ initDb()
     console.error("Gagal konek/menyiapkan database:", err.message);
     console.error("Cek kembali isian DB_HOST/DB_USER/DB_PASSWORD/DB_NAME di file .env");
     process.exit(1);
+    module.exports = app;
   });
