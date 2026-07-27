@@ -366,8 +366,8 @@ app.get("/api/absen/export", requireAdminKey, wrap(async (req, res) => {
   res.send(csv);
 }));
 
-app.get("/admin", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "admin.html"));
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
 if (!process.env.VERCEL) {
