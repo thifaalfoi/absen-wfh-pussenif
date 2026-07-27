@@ -31,7 +31,7 @@
     color:var(--text);
     font-family:'Inter', system-ui, sans-serif;
     display:flex;
-    align-items:flex-start;
+    align-items:center;
     justify-content:center;
     padding:28px 16px 60px;
   }
@@ -44,6 +44,7 @@
     border-radius:18px;
     position:relative;
     overflow:hidden;
+    margin:0 auto;
   }
 
   .card-top{ padding:22px 22px 16px; }
@@ -102,7 +103,7 @@
   }
   canvas, img.preview{ display:none; }
 
-  /* --- garis perforasi ala tiket, aman di layar kecil karena .card overflow:hidden --- */
+  /* --- garis perforasi ala tiket --- */
   .perforation{
     position:relative;
     height:1px;
@@ -140,7 +141,7 @@
     color:var(--text);
     padding:13px 12px;
     border-radius:8px;
-    font-size:16px; /* >=16px biar Safari iOS gak auto-zoom */
+    font-size:16px;
     font-family:'Inter', sans-serif;
   }
   select{
@@ -162,9 +163,9 @@
   button{
     flex:1;
     padding:13px 12px;
-    min-height:46px; /* target sentuh nyaman di HP */
+    min-height:46px;
     border:none;
-    border-radius:9px;
+    border-radius:99px;
     font-weight:600;
     font-size:14px;
     cursor:pointer;
@@ -184,7 +185,7 @@
   .status.ok{ color:var(--green); }
   .status.err{ color:var(--red); }
 
-  /* --- stempel muncul setelah foto berhasil diambil --- */
+  /* --- stempel verifikasi --- */
   .stamp{
     position:absolute;
     top:56px; right:30px;
@@ -255,21 +256,23 @@
     margin-top:16px;
   }
 
+  /* PERBAIKAN STYLING INTRO PAGE */
   .intro{
-    min-height:100vh;
+    width: 100%;
+    max-width: 420px;
     display:flex;
     flex-direction:column;
     align-items:center;
     justify-content:center;
     text-align:center;
-    padding:32px;
-    gap:6px;
+    padding: 20px;
+    margin: 40px auto 0 auto;
     animation:fadeIn 0.4s ease;
   }
   .intro-logo{
     width:100px;
     height:auto;
-    margin-bottom:14px;
+    margin-bottom:18px;
     filter:drop-shadow(0 4px 10px rgba(0,0,0,0.5));
   }
   .intro-eyebrow{
@@ -282,13 +285,13 @@
     border:1px solid var(--gold-dim);
     padding:4px 10px;
     border-radius:3px;
-    margin-bottom:10px;
+    margin-bottom:14px;
   }
   .intro-title{
     font-family:'Fraunces', serif;
     font-weight:600;
     font-size:32px;
-    margin:0 0 10px;
+    margin:0 0 12px;
   }
   .intro-sub{
     color:var(--muted);
@@ -298,15 +301,21 @@
     margin:0 0 28px;
   }
   .intro-btn{
+    width: 100%;
+    max-width: 280px;
+    height: 48px;
+    min-height: 48px;
     background:var(--gold);
     color:#1a1305;
     border:none;
-    padding:14px 32px;
     border-radius:10px;
     font-weight:700;
     font-size:15px;
     cursor:pointer;
     font-family:'Inter', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .intro-btn:hover{ filter:brightness(1.07); }
   @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
@@ -320,14 +329,14 @@
 <body>
 
 <div class="intro" id="intro">
-  <img src="/logo.png" alt="Logo Yudha Wastu Pramuka" class="intro-logo" />
+  <img src="logo-pussenif.png" alt="Logo Yudha Wastu Pramuka" class="intro-logo" />
   <span class="intro-eyebrow">Registri · Pussenif</span>
   <h1 class="intro-title">Absen WFH</h1>
   <p class="intro-sub">Kehadiran kerja dari rumah — diverifikasi lewat selfie dan lokasi, setiap hari Jumat pukul 06.30–08.00.</p>
   <button id="btnMulai" class="intro-btn">Mulai Absen</button>
 </div>
 
-<div id="mainApp" style="display:none">
+<div id="mainApp" style="display:none; width:100%;">
 <div>
   <div class="card">
     <div class="stamp" id="stamp">Terverifikasi<br/>Jumat</div>
@@ -338,7 +347,7 @@
         <span id="dayBadge"></span>
       </div>
       <div class="brand-row">
-        <img src="/logo.png" alt="Logo Yudha Wastu Pramuka" class="brand-logo" />
+        <img src="logo.png" alt="Logo Yudha Wastu Pramuka" class="brand-logo" />
         <div>
           <h1>Kartu Kehadiran</h1>
           <p class="sub">Jumat, 06.30–08.00 · lewat jam 08.00 tercatat terlambat.</p>
@@ -393,7 +402,8 @@
 </div>
 </div>
 
-<script>const video = document.getElementById("video");
+<script>
+const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const preview = document.getElementById("preview");
 const namaInput = document.getElementById("nama");
@@ -421,7 +431,7 @@ btnMulai.addEventListener("click", () => {
 
 let stream = null;
 let capturedDataUrl = null;
-let currentPosition = null; // { lat, lng, akurasi }
+let currentPosition = null;
 
 const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
@@ -497,7 +507,6 @@ btnCamera.addEventListener("click", async () => {
     btnCapture.disabled = false;
     setStatus("Kamera aktif. Posisikan wajah lalu ambil foto.", "");
 
-    // Sekalian minta lokasi begitu kamera dinyalakan, biar user hanya izinkan sekali di awal
     requestLocation();
   } catch (err) {
     setStatus("Gagal mengakses kamera: " + err.message + " (pastikan izin kamera diaktifkan di browser)", "err");
@@ -552,7 +561,6 @@ btnCapture.addEventListener("click", () => {
   btnCapture.disabled = true;
   btnSubmit.disabled = false;
 
-  // Matikan stream kamera setelah foto diambil
   if (stream) {
     stream.getTracks().forEach((t) => t.stop());
   }
