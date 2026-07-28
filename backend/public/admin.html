@@ -329,7 +329,11 @@ async function loadPeserta(){
   const empty = document.getElementById('pesertaEmpty');
   try{
     const res = await fetch('/api/peserta');
-    const data = await res.json();
+    const responseJson = await res.json();
+    
+    // Ambil array-nya secara aman (mendukung format array langsung atau objek { data: [...] })
+    const data = Array.isArray(responseJson) ? responseJson : (responseJson.data || responseJson.peserta || []);
+    
     tbody.innerHTML = '';
     if(data.length === 0){
       empty.style.display = 'block';
@@ -350,7 +354,9 @@ async function loadPeserta(){
       `;
       tbody.appendChild(tr);
     }
-  }catch(e){}
+  }catch(e){
+    console.error("Gagal memuat peserta:", e);
+  }
 }
 
 function pesertaFormStatus(msg, ok){
