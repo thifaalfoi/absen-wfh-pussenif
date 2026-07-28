@@ -620,14 +620,22 @@
     let totalPages = 1;
 
     function unlock() {
-      adminKey = "bypass";
+      const keyInput = document.getElementById('adminKeyLocked').value.trim();
+      if (!keyInput) {
+        document.getElementById('lockStatus').textContent = 'Masukkan kunci admin dulu.';
+        return;
+      }
+      adminKey = keyInput;
+      document.getElementById('lockStatus').textContent = '';
       document.getElementById('lockedView').style.display = 'none';
       document.getElementById('dashboardView').style.display = 'block';
       loadStats();
       loadData();
       loadPeserta();
     }
-    window.addEventListener('DOMContentLoaded', unlock);
+    document.getElementById('adminKeyLocked').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') unlock();
+    });
 
     function resetFilter() {
       document.getElementById('search').value = '';
@@ -672,9 +680,10 @@
       try {
         const res = await fetch('/api/absen?' + params.toString());
         if (res.status === 401) {
-          status.textContent = 'Kunci admin salah.';
+          status.textContent = '';
           document.getElementById('dashboardView').style.display = 'none';
           document.getElementById('lockedView').style.display = 'block';
+          document.getElementById('lockStatus').textContent = 'Kunci admin salah. Coba lagi.';
           return;
         }
         const { data, total, totalPages: tp } = await res.json();
