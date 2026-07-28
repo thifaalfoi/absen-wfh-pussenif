@@ -346,7 +346,8 @@
       <div class="mark-lg">Akses Terbatas</div>
       <p style="color:var(--muted); margin-bottom:18px;">Masukkan kunci admin untuk membuka registri.</p>
       <input type="password" id="adminKeyLocked" placeholder="Kunci admin" style="width:240px" />
-      <button onclick="unlock()">Buka</button>
+      <!-- Contoh pada tag tombol atau form -->
+<button type="button" onclick="unlock(event)">Buka</button>
       <div class="status" id="lockStatus" style="margin-top:10px"></div>
     </div>
 
@@ -646,7 +647,7 @@
    async function loadStats() {
       try {
         const res = await fetch('/api/absen/stats?key=' + encodeURIComponent(adminKey));
-        if (!res.ok) return;
+        if (event) event.preventDefault();
         const s = await res.json();
         document.getElementById('statTotal').textContent = s.total;
         document.getElementById('statHariIni').textContent = s.hariIni;
