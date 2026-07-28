@@ -643,7 +643,7 @@
       loadData();
     }
 
-    async function loadStats() {
+   async function loadStats() {
       try {
         const res = await fetch('/api/absen/stats?key=' + encodeURIComponent(adminKey));
         if (!res.ok) return;
@@ -695,23 +695,23 @@
               ? `${row.kegiatan} — ${row.kegiatan_catatan}`
               : (row.kegiatan || '-');
             tr.innerHTML = `
-          <td>
-            <div class="who">
-              <div class="thumb-wrap">
-                <img class="thumb" src="${row.foto_url}" alt="selfie" />
-                <div class="stamp">✓</div>
-              </div>
-              <span class="nama">${row.nama}</span>
-            </div>
-          </td>
-          <td class="waktu">${waktu}</td>
-          <td>
-            <span style="color:var(--green); font-weight:600; font-size:12.5px">${row.status || '-'}</span>
-            ${row.terlambat === 'Ya' ? '<span style="color:var(--red); font-weight:600; font-size:11px; margin-left:6px; border:1px solid var(--red); padding:1px 6px; border-radius:999px;">Terlambat</span>' : ''}
-          </td>
-          <td style="max-width:220px; font-size:12.5px">${kegiatanText}</td>
-          <td><a class="maplink" target="_blank" href="https://www.google.com/maps?q=${row.lat},${row.lng}">Lihat di peta ↗</a></td>
-        `;
+              <td>
+                <div class="who">
+                  <div class="thumb-wrap">
+                    <img class="thumb" src="${row.foto_url}" alt="selfie" />
+                    <div class="stamp">✓</div>
+                  </div>
+                  <span class="nama">${row.nama}</span>
+                </div>
+              </td>
+              <td class="waktu">${waktu}</td>
+              <td>
+                <span style="color:var(--green); font-weight:600; font-size:12.5px">${row.status || '-'}</span>
+                ${row.terlambat === 'Ya' ? '<span style="color:var(--red); font-weight:600; font-size:11px; margin-left:6px; border:1px solid var(--red); padding:1px 6px; border-radius:999px;">Terlambat</span>' : ''}
+              </td>
+              <td style="max-width:220px; font-size:12.5px">${kegiatanText}</td>
+              <td><a class="maplink" target="_blank" href="https://www.google.com/maps?q=${row.lat},${row.lng}">Lihat di peta ↗</a></td>
+            `;
             tbody.appendChild(tr);
           }
         }
