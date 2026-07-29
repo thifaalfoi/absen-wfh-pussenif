@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tidak Ada Koneksi</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .container { text-align: center; max-width: 480px; padding: 40px; }
+    .icon { font-size: 72px; margin-bottom: 24px; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+    h1 { font-size: 26px; font-weight: 700; margin-bottom: 10px; }
+    p { font-size: 15px; color: #94a3b8; line-height: 1.6; margin-bottom: 8px; }
+    .url {
+      margin: 20px 0;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-size: 13px;
+      color: #60a5fa;
+      word-break: break-all;
+    }
+    .tip {
+      margin-top: 16px;
+      background: rgba(245,158,11,0.1);
+      border: 1px solid rgba(245,158,11,0.3);
+      border-radius: 12px;
+      padding: 14px 18px;
+      text-align: left;
+      font-size: 13px;
+      color: #fde68a;
+      line-height: 1.8;
+    }
+    button {
+      margin-top: 28px;
+      padding: 13px 36px;
+      background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 15px rgba(59,130,246,0.4);
+    }
+    button:hover { transform: translateY(-1px); opacity: 0.9; }
+    button:active { transform: translateY(0); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">📡</div>
+    <h1>Tidak Ada Koneksi Internet</h1>
+    <p>Aplikasi membutuhkan koneksi internet untuk membuka dashboard.</p>
+    <div class="url">https://absen-wfh-pussenif.vercel.app/admin</div>
+    <div class="tip">
+      💡 <strong>Tips:</strong><br/>
+      • Periksa koneksi WiFi atau kabel LAN<br/>
+      • Pastikan tidak ada firewall yang memblokir<br/>
+      • Coba buka URL di atas langsung di browser
+    </div>
+    <button onclick="location.reload()">🔄 Coba Lagi</button>
+  </div>
+</body>
+</html>

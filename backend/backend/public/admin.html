@@ -325,141 +325,10 @@
       text-transform: uppercase;
       margin-bottom: 8px;
     }
-
-    /* ---- Toast notifications ---- */
-    #toastContainer {
-      position: fixed;
-      top: 18px;
-      right: 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      z-index: 9999;
-      width: 100%;
-      max-width: 340px;
-    }
-
-    .toast {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: var(--panel-2);
-      border: 1px solid var(--line);
-      color: var(--text);
-      padding: 12px 14px;
-      border-radius: 10px;
-      font-size: 13px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-      transform: translateX(24px);
-      opacity: 0;
-      animation: toastIn 0.25s ease forwards;
-    }
-
-    .toast.hide {
-      animation: toastOut 0.25s ease forwards;
-    }
-
-    .toast .dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      flex: none;
-    }
-
-    .toast.ok .dot {
-      background: var(--green);
-    }
-
-    .toast.err .dot {
-      background: var(--red);
-    }
-
-    .toast.info .dot {
-      background: var(--gold);
-    }
-
-    @keyframes toastIn {
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-
-    @keyframes toastOut {
-      to {
-        transform: translateX(24px);
-        opacity: 0;
-      }
-    }
-
-    /* ---- Statistik & grafik ringkas ---- */
-    .chart-panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 16px 18px;
-      margin-bottom: 22px;
-    }
-
-    .chart-panel .chart-title {
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      margin-bottom: 10px;
-    }
-
-    #weeklyChart {
-      width: 100%;
-      height: 120px;
-      display: block;
-    }
-
-    /* ---- Catatan & lampiran ---- */
-    .catatan-cell {
-      max-width: 200px;
-      font-size: 12px;
-      color: var(--muted);
-      white-space: normal;
-    }
-
-    a.lampiranlink {
-      color: var(--gold);
-      text-decoration: none;
-      font-size: 12.5px;
-      font-weight: 500;
-    }
-
-    a.lampiranlink:hover {
-      text-decoration: underline;
-    }
-
-    .badge-status {
-      display: inline-block;
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 8px;
-      border-radius: 999px;
-      border: 1px solid;
-    }
-
-    .badge-hadir {
-      color: var(--green);
-      border-color: rgba(76, 175, 125, 0.4);
-      background: rgba(76, 175, 125, 0.12);
-    }
-
-    .badge-izin, .badge-sakit {
-      color: #E2A83D;
-      border-color: rgba(226, 168, 61, 0.4);
-      background: rgba(226, 168, 61, 0.12);
-    }
   </style>
 </head>
 
 <body>
-
-  <div id="toastContainer"></div>
 
   <header>
     <div class="brand">
@@ -502,11 +371,6 @@
         </div>
       </div>
 
-      <div class="chart-panel">
-        <div class="chart-title">Kehadiran 7 Hari Terakhir</div>
-        <canvas id="weeklyChart" width="900" height="120"></canvas>
-      </div>
-
       <div class="panel">
         <div class="toolbar">
           <input type="text" id="search" placeholder="Cari nama..." />
@@ -515,7 +379,6 @@
           <div class="spacer"></div>
           <span class="status" id="status"></span>
           <button class="ghost" onclick="exportCsv()">Export CSV</button>
-          <button class="ghost" onclick="exportExcel()">📊 Export Excel</button>
         </div>
 
         <table id="table">
@@ -525,8 +388,6 @@
               <th>Waktu Absen</th>
               <th>Status</th>
               <th>Kegiatan</th>
-              <th>Catatan</th>
-              <th>Lampiran</th>
               <th>Lokasi</th>
             </tr>
           </thead>
@@ -683,7 +544,7 @@
         loadPeserta();
         loadStats();
       } catch (e) {
-        showToast('Gagal menghapus peserta: ' + e.message, 'err');
+        alert('Gagal menghapus peserta: ' + e.message);
       }
     }
 
@@ -772,7 +633,6 @@
       loadStats();
       loadData();
       loadPeserta();
-      loadWeeklyChart();
     }
     document.getElementById('adminKeyLocked').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') unlock();
@@ -840,15 +700,10 @@
           for (const row of data) {
             const tr = document.createElement('tr');
             const waktu = new Date(row.waktu).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+            const statusColor = (row.status === 'WFH') ? 'var(--green)' : (row.status === 'Di kantor' ? 'var(--muted)' : 'var(--red)');
             const kegiatanText = (row.kegiatan === 'Lainnya' && row.kegiatan_catatan)
               ? `${row.kegiatan} — ${row.kegiatan_catatan}`
               : (row.kegiatan || '-');
-            const kehadiran = row.status_kehadiran || row.status || 'Hadir';
-            const badgeClass = kehadiran === 'Izin' ? 'badge-izin' : (kehadiran === 'Sakit' ? 'badge-sakit' : 'badge-hadir');
-            const catatanText = row.catatan ? escapeHtml(row.catatan) : '<span style="color:var(--muted)">—</span>';
-            const lampiranCell = row.lampiran_url
-              ? `<a class="lampiranlink" target="_blank" href="${row.lampiran_url}">📎 Lihat</a>`
-              : '<span style="color:var(--muted)">—</span>';
             tr.innerHTML = `
               <td>
                 <div class="who">
@@ -861,12 +716,10 @@
               </td>
               <td class="waktu">${waktu}</td>
               <td>
-                <span class="badge-status ${badgeClass}">${kehadiran}</span>
+                <span style="color:var(--green); font-weight:600; font-size:12.5px">${row.status || '-'}</span>
                 ${row.terlambat === 'Ya' ? '<span style="color:var(--red); font-weight:600; font-size:11px; margin-left:6px; border:1px solid var(--red); padding:1px 6px; border-radius:999px;">Terlambat</span>' : ''}
               </td>
-              <td style="max-width:200px; font-size:12.5px">${kegiatanText}</td>
-              <td class="catatan-cell">${catatanText}</td>
-              <td>${lampiranCell}</td>
+              <td style="max-width:220px; font-size:12.5px">${kegiatanText}</td>
               <td><a class="maplink" target="_blank" href="https://www.google.com/maps?q=${row.lat},${row.lng}">Lihat di peta ↗</a></td>
             `;
             tbody.appendChild(tr);
@@ -893,142 +746,6 @@
 
     document.getElementById('search').addEventListener('input', () => { page = 1; loadData(); });
     document.getElementById('tanggal').addEventListener('change', () => { page = 1; loadData(); });
-
-    // ==========================================================
-    // FITUR 6: Toast Notification Beranimasi
-    // ==========================================================
-    const toastContainer = document.getElementById('toastContainer');
-    function showToast(msg, type, duration) {
-      type = type || 'info';
-      duration = duration || 3500;
-      const el = document.createElement('div');
-      el.className = 'toast ' + type;
-      const dot = document.createElement('span');
-      dot.className = 'dot';
-      const text = document.createElement('span');
-      text.textContent = msg;
-      el.appendChild(dot);
-      el.appendChild(text);
-      toastContainer.appendChild(el);
-      setTimeout(() => {
-        el.classList.add('hide');
-        el.addEventListener('animationend', () => el.remove(), { once: true });
-      }, duration);
-    }
-
-    function escapeHtml(str) {
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
-    }
-
-    // ==========================================================
-    // FITUR 2: Ekspor ke Excel (.xlsx), memakai SheetJS yang sudah dimuat
-    // ==========================================================
-    async function exportExcel() {
-      const search = document.getElementById('search').value.trim();
-      const tanggal = document.getElementById('tanggal').value;
-      const params = new URLSearchParams({ key: adminKey, page: 1, limit: 10000 });
-      if (search) params.set('search', search);
-      if (tanggal) params.set('tanggal', tanggal);
-
-      showToast('Menyiapkan file Excel...', 'info', 2000);
-      try {
-        const res = await fetch('/api/absen?' + params.toString());
-        if (!res.ok) {
-          showToast('Gagal mengambil data untuk export.', 'err');
-          return;
-        }
-        const { data } = await res.json();
-        if (!data || data.length === 0) {
-          showToast('Tidak ada data untuk diekspor.', 'err');
-          return;
-        }
-        const rows = data.map(row => ({
-          Nama: row.nama,
-          Waktu: new Date(row.waktu).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
-          Status: row.status_kehadiran || row.status || 'Hadir',
-          Terlambat: row.terlambat === 'Ya' ? 'Ya' : 'Tidak',
-          Kegiatan: row.kegiatan === 'Lainnya' && row.kegiatan_catatan ? `${row.kegiatan} — ${row.kegiatan_catatan}` : (row.kegiatan || ''),
-          Catatan: row.catatan || '',
-          Lampiran: row.lampiran_url || '',
-          Latitude: row.lat,
-          Longitude: row.lng,
-        }));
-        const ws = XLSX.utils.json_to_sheet(rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Rekap Absen');
-        const tanggalFile = new Date().toISOString().slice(0, 10);
-        XLSX.writeFile(wb, `rekap-absen-${tanggalFile}.xlsx`);
-        showToast('File Excel berhasil diunduh.', 'ok');
-      } catch (e) {
-        showToast('Gagal membuat file Excel: ' + e.message, 'err');
-      }
-    }
-
-    // ==========================================================
-    // FITUR 5: Statistik & grafik kehadiran ringkas (7 hari terakhir)
-    // ==========================================================
-    async function loadWeeklyChart() {
-      const canvas = document.getElementById('weeklyChart');
-      const ctx = canvas.getContext('2d');
-      const days = [];
-      const HARI_SINGKAT = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-      const today = new Date();
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        days.push({ key: d.toISOString().slice(0, 10), label: HARI_SINGKAT[d.getDay()], count: 0 });
-      }
-
-      try {
-        const params = new URLSearchParams({ key: adminKey, page: 1, limit: 2000 });
-        const res = await fetch('/api/absen?' + params.toString());
-        if (res.ok) {
-          const { data } = await res.json();
-          for (const row of (data || [])) {
-            const key = new Date(row.waktu).toISOString().slice(0, 10);
-            const day = days.find(d => d.key === key);
-            if (day) day.count++;
-          }
-        }
-      } catch (e) {
-        // Grafik tetap ditampilkan kosong bila gagal memuat data
-      }
-
-      drawBarChart(ctx, canvas.width, canvas.height, days);
-    }
-
-    function drawBarChart(ctx, width, height, days) {
-      ctx.clearRect(0, 0, width, height);
-      const max = Math.max(1, ...days.map(d => d.count));
-      const padding = 24;
-      const chartH = height - padding - 20;
-      const barGap = 16;
-      const barW = (width - padding * 2 - barGap * (days.length - 1)) / days.length;
-
-      ctx.font = '11px Inter, sans-serif';
-      days.forEach((d, i) => {
-        const x = padding + i * (barW + barGap);
-        const h = (d.count / max) * chartH;
-        const y = height - 20 - h;
-
-        const grad = ctx.createLinearGradient(0, y, 0, height - 20);
-        grad.addColorStop(0, '#D4A73C');
-        grad.addColorStop(1, '#8a7431');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.roundRect ? ctx.roundRect(x, y, barW, Math.max(h, 2), 4) : ctx.rect(x, y, barW, Math.max(h, 2));
-        ctx.fill();
-
-        ctx.fillStyle = '#f8f9fa';
-        ctx.textAlign = 'center';
-        if (d.count > 0) ctx.fillText(String(d.count), x + barW / 2, y - 6);
-
-        ctx.fillStyle = '#8891A8';
-        ctx.fillText(d.label, x + barW / 2, height - 6);
-      });
-    }
   </script>
 
 </body>
