@@ -51,9 +51,16 @@ btnMulai.addEventListener("click", () => {
 
 function updateDayBadge() {
   const today = new Date();
-  const namaHari = HARI[today.getDay()];
-  dayBadge.textContent = `Hari ini: ${namaHari}`;
-  if (today.getDay() !== 5) {
+  const dow = today.getDay(); // 0=Minggu ... 6=Sabtu
+  const namaHari = HARI[dow];
+
+  if (dow === 5) {
+    dayBadge.textContent = `Hari ini: ${namaHari} (Jadwal WFH)`;
+  } else if (dow === 0 || dow === 6) {
+    dayBadge.textContent = `Hari ini: ${namaHari} (Libur)`;
+    dayBadge.style.color = "#8891A8";
+  } else {
+    dayBadge.textContent = `Hari ini: ${namaHari} (Bukan jadwal WFH)`;
     dayBadge.style.color = "#e2554d";
   }
 }

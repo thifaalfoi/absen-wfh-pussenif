@@ -503,8 +503,9 @@
       </div>
 
       <div class="chart-panel">
-        <div class="chart-title">Kehadiran 7 Hari Terakhir</div>
+        <div class="chart-title">Kehadiran 6 Jum'at Terakhir (WFH setiap Jum'at)</div>
         <canvas id="weeklyChart" width="900" height="120"></canvas>
+        <div style="margin-top:8px; font-size:11.5px; color:var(--muted);">Sabtu &amp; Minggu libur — grafik hanya menghitung kehadiran hari Jum'at.</div>
       </div>
 
       <div class="panel">
@@ -967,18 +968,27 @@
     }
 
     // ==========================================================
-    // FITUR 5: Statistik & grafik kehadiran ringkas (7 hari terakhir)
+    // FITUR 5: Statistik & grafik kehadiran ringkas
+    // WFH hanya berlangsung setiap hari Jum'at (Sabtu & Minggu libur),
+    // jadi grafik menampilkan 6 Jum'at terakhir, bukan 7 hari kalender.
     // ==========================================================
     async function loadWeeklyChart() {
       const canvas = document.getElementById('weeklyChart');
       const ctx = canvas.getContext('2d');
       const days = [];
-      const HARI_SINGKAT = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
       const today = new Date();
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        days.push({ key: d.toISOString().slice(0, 10), label: HARI_SINGKAT[d.getDay()], count: 0 });
+
+      // Mundur ke Jum'at terdekat (hari ke-5, 0=Minggu), lalu ambil 6 Jum'at terakhir
+      const dayOfWeek = today.getDay(); // 0=Min .. 6=Sab
+      let diffToFriday = (dayOfWeek - 5 + 7) % 7; // 0 jika hari ini Jum'at
+      const lastFriday = new Date(today);
+      lastFriday.setDate(lastFriday.getDate() - diffToFriday);
+
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(lastFriday);
+        d.setDate(d.getDate() - i * 7);
+        const label = `${d.getDate()}/${d.getMonth() + 1}`;
+        days.push({ key: d.toISOString().slice(0, 10), label, count: 0 });
       }
 
       try {
