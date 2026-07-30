@@ -105,9 +105,11 @@ async function loadPeserta() {
 
     namaInput.innerHTML = `<option value="">— pilih nama dari daftar peserta —</option>`;
     for (const p of list) {
+      const namaVal = p.nama_lengkap || p.nama || p.fullname || p;
+      if (!namaVal) continue;
       const opt = document.createElement("option");
-      opt.value = p.nama_lengkap;
-      opt.textContent = p.nama_lengkap;
+      opt.value = namaVal;
+      opt.textContent = namaVal;
       namaInput.appendChild(opt);
     }
     if (list.length === 0) {
@@ -253,14 +255,12 @@ function setQualityBadge(state, text) {
 }
 
 function analyzePhotoQuality(ctx, width, height) {
-  // Ambil sampel dari canvas untuk performa (tetap representatif)
   const sampleW = Math.min(width, 160);
   const sampleH = Math.min(height, 120);
   let imageData;
   try {
     imageData = ctx.getImageData(0, 0, width, height);
   } catch (e) {
-    // Jika gagal (mis. tainted canvas), anggap lolos supaya tidak memblokir user
     return { ok: true, brightness: 128, variance: 50, reason: "unchecked" };
   }
   const data = imageData.data;
@@ -278,15 +278,12 @@ function analyzePhotoQuality(ctx, width, height) {
   const mean = sum / n;
   const variance = sumSq / n - mean * mean;
 
-  // Terlalu gelap
   if (mean < 25) {
     return { ok: false, brightness: mean, variance, reason: "gelap" };
   }
-  // Terlalu terang / silau (kemungkinan menghadap cahaya langsung / kosong putih)
   if (mean > 240 && variance < 60) {
     return { ok: false, brightness: mean, variance, reason: "terang" };
   }
-  // Variansi sangat rendah = kemungkinan foto kosong/blur/tertutup
   if (variance < 15) {
     return { ok: false, brightness: mean, variance, reason: "kosong" };
   }
@@ -370,7 +367,6 @@ function getLocalHistory() {
 function saveLocalHistory(entry) {
   const list = getLocalHistory();
   list.unshift(entry);
-  // Batasi maksimal 50 entri agar localStorage tidak membengkak
   localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 50)));
 }
 
@@ -486,7 +482,6 @@ btnSubmit.addEventListener("click", async () => {
 
     const terlambat = data.terlambat === "Ya" ? "Ya" : "Tidak";
 
-    // Simpan ke riwayat lokal (fitur 7), tidak tergantung respons server
     saveLocalHistory({
       waktu: new Date().toISOString(),
       nama,
