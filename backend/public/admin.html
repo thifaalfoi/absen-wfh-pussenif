@@ -505,7 +505,7 @@
       <div class="chart-panel">
         <div class="chart-title">Kehadiran 6 Jum'at Terakhir (WFH setiap Jum'at)</div>
         <canvas id="weeklyChart" width="900" height="120"></canvas>
-        <div style="margin-top:8px; font-size:11.5px; color:var(--muted);">Sabtu &amp; Minggu libur — grafik hanya menghitung kehadiran hari Jum'at.</div>
+        <div style="margin-top:8px; font-size:11.5px; color:var(--muted);">Kehadiran dihitung mulai Jum'at, 7 Agustus 2026 — maks. 6 Jum'at terakhir ditampilkan.</div>
       </div>
 
       <div class="panel">
@@ -801,7 +801,7 @@
         document.getElementById('statTotal').textContent = s.total;
         document.getElementById('statHariIni').textContent = s.hariIni;
         document.getElementById('statTerlambat').textContent = s.terlambatHariIni;
-        document.getElementById('statOrang').textContent = s.orangUnik;
+        document.getElementById('statOrang').textContent = s.totalPeserta;
       } catch (e) { }
     }
 
@@ -970,7 +970,7 @@
     // ==========================================================
     // FITUR 5: Statistik & grafik kehadiran ringkas
     // WFH hanya berlangsung setiap hari Jum'at (Sabtu & Minggu libur),
-    // jadi grafik menampilkan 6 Jum'at terakhir, bukan 7 hari kalender.
+    // Grafik dimulai dari Jum'at 7 Agustus 2026 sebagai titik pertama.
     // ==========================================================
     async function loadWeeklyChart() {
       const canvas = document.getElementById('weeklyChart');
@@ -978,15 +978,25 @@
       const days = [];
       const today = new Date();
 
-      // Mundur ke Jum'at terdekat (hari ke-5, 0=Minggu), lalu ambil 6 Jum'at terakhir
+      // Tanggal mulai kehadiran: Jum'at 7 Agustus 2026
+      const TANGGAL_MULAI = new Date('2026-08-07T00:00:00');
+
+      // Mundur ke Jum'at terdekat dari hari ini
       const dayOfWeek = today.getDay(); // 0=Min .. 6=Sab
       let diffToFriday = (dayOfWeek - 5 + 7) % 7; // 0 jika hari ini Jum'at
       const lastFriday = new Date(today);
       lastFriday.setDate(lastFriday.getDate() - diffToFriday);
 
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date(lastFriday);
-        d.setDate(d.getDate() - i * 7);
+      // Kumpulkan Jum'at dari TANGGAL_MULAI s/d lastFriday (maks 6)
+      const allFridays = [];
+      const cursor = new Date(TANGGAL_MULAI);
+      while (cursor <= lastFriday) {
+        allFridays.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() + 7);
+      }
+      // Ambil 6 terakhir
+      const shown = allFridays.slice(-6);
+      for (const d of shown) {
         const label = `${d.getDate()}/${d.getMonth() + 1}`;
         days.push({ key: d.toISOString().slice(0, 10), label, count: 0 });
       }

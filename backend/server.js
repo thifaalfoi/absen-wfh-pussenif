@@ -358,7 +358,10 @@ app.get("/api/absen/stats", requireAdminKey, wrap(async (req, res) => {
     `SELECT COUNT(*) AS terlambatCount FROM absen WHERE waktu LIKE ? AND terlambat = 'Ya'`,
     [`${hariIni}%`]
   );
-  res.json({ total, hariIni: hariIniCount, orangUnik, terlambatHariIni: terlambatCount });
+  const [[{ totalPeserta }]] = await pool.query(
+    `SELECT COUNT(*) AS totalPeserta FROM peserta WHERE status_pensiun = 'Aktif' OR status_pensiun IS NULL`
+  );
+  res.json({ total, hariIni: hariIniCount, orangUnik, terlambatHariIni: terlambatCount, totalPeserta });
 }));
 
 app.get("/api/absen/export", requireAdminKey, wrap(async (req, res) => {
