@@ -346,10 +346,18 @@ app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
     [...params, limit, offset]
   );
 
-  const data = rows.map((r) => ({
-    ...r,
-    foto_url: (r.foto_path && (r.foto_path.startsWith("data:") || r.foto_path.startsWith("http"))) ? r.foto_path : `/uploads/${r.foto_path}`
-  }));
+ const data = rows.map((r) => {
+    let url = r.foto_path;
+    if (r.foto_path && !r.foto_path.startsWith("data:") && !r.foto_path.startsWith("http")) {
+      // Jika data lama berupa nama file tapi filenya tidak ada/format lama, 
+      // kita berikan placeholder atau biarkan kosong agar tidak error 404 di browser
+      url = r.foto_path; 
+    }
+    return {
+      ...r,
+      foto_url: url
+    };
+  });
   res.json({ data, total, page, limit, totalPages: Math.max(Math.ceil(total / limit), 1) });
 }));
 
