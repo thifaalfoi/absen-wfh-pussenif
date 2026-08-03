@@ -349,9 +349,8 @@ app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
  const data = rows.map((r) => {
     let url = r.foto_path;
     if (r.foto_path && !r.foto_path.startsWith("data:") && !r.foto_path.startsWith("http")) {
-      // Jika data lama berupa nama file tapi filenya tidak ada/format lama, 
-      // kita berikan placeholder atau biarkan kosong agar tidak error 404 di browser
-      url = r.foto_path; 
+      // Ubah jadi string kosong agar frontend tidak mencoba meload file fisik lama yang tidak ada
+      url = ""; 
     }
     return {
       ...r,
