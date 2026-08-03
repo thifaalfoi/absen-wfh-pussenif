@@ -348,7 +348,7 @@ app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
 
   const data = rows.map((r) => ({
     ...r,
-    foto_url: (r.foto_path && r.foto_path.startsWith("data:")) ? r.foto_path : `/uploads/${r.foto_path}`
+    foto_url: (r.foto_path && (r.foto_path.startsWith("data:") || r.foto_path.startsWith("http"))) ? r.foto_path : `/uploads/${r.foto_path}`
   }));
   res.json({ data, total, page, limit, totalPages: Math.max(Math.ceil(total / limit), 1) });
 }));
