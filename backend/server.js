@@ -76,6 +76,12 @@ async function initDb() {
     await tambahKolomJikaBelumAda("peserta", "status_pensiun", "VARCHAR(20) DEFAULT 'Aktif'"); // Aktif / Pensiun
     await tambahKolomJikaBelumAda("absen", "terlambat", "VARCHAR(5)");
 
+    try {
+      await pool.query(`ALTER TABLE absen MODIFY COLUMN foto_path LONGTEXT`);
+    } catch (err) {
+      console.error("Gagal mengubah tipe data foto_path:", err);
+    }
+
     // Peserta lama yang kolom status_pensiun-nya masih kosong dianggap Aktif
     await pool.query(`UPDATE peserta SET status_pensiun = 'Aktif' WHERE status_pensiun IS NULL OR status_pensiun = ''`);
 
@@ -304,18 +310,13 @@ app.post("/api/absen", wrap(async (req, res) => {
   if (!matches) {
     return res.status(400).json({ error: "Format foto tidak valid." });
   }
-  const ext = matches[1] === "png" ? "png" : "jpg";
-  const buffer = Buffer.from(matches[2], "base64");
 
   const id = crypto.randomUUID();
-  const fileName = `${id}.${ext}`;
-  fs.writeFileSync(path.join(UPLOAD_DIR, fileName), buffer);
-
   const waktu = new Date().toISOString();
   await pool.query(
     `INSERT INTO absen (id, nama, waktu, lat, lng, akurasi, foto_path, status, kegiatan, kegiatan_catatan, terlambat)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, nama, waktu, lat, lng, akurasi || null, fileName, "WFH", kegiatan, kegiatan === "Lainnya" ? kegiatan_catatan.trim() : null, terlambat]
+    [id, nama, waktu, lat, lng, akurasi || null, foto, "WFH", kegiatan, kegiatan === "Lainnya" ? kegiatan_catatan.trim() : null, terlambat]
   );
 
   res.json({ ok: true, id, waktu, terlambat });
@@ -345,7 +346,10 @@ app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
     [...params, limit, offset]
   );
 
-  const data = rows.map((r) => ({ ...r, foto_url: `/uploads/${r.foto_path}` }));
+  const data = rows.map((r) => ({
+    ...r,
+    foto_url: (r.foto_path && r.foto_path.startsWith("data:")) ? r.foto_path : `/uploads/${r.foto_path}`
+  }));
   res.json({ data, total, page, limit, totalPages: Math.max(Math.ceil(total / limit), 1) });
 }));
 
