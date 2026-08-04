@@ -11,6 +11,7 @@ const lampiranWrap = document.getElementById("lampiranWrap");
 const lampiranFile = document.getElementById("lampiranFile");
 const catatanInput = document.getElementById("catatan");
 const catatanCount = document.getElementById("catatanCount");
+const catatanLabel = document.getElementById("catatanLabel");
 const btnCamera = document.getElementById("btnCamera");
 const btnCapture = document.getElementById("btnCapture");
 const btnRetake = document.getElementById("btnRetake");
@@ -154,7 +155,30 @@ catatanInput.addEventListener("input", () => {
 
 // ==========================================================
 // FITUR 4: Status Kehadiran fleksibel + lampiran izin/sakit
+// + Catatan Sakit / Catatan Izin (kolom catatan berubah otomatis)
 // ==========================================================
+const CATATAN_CONFIG = {
+  Hadir: {
+    label: "Catatan / Keterangan Tugas",
+    placeholder: "Tuliskan ringkasan tugas atau catatan hari ini (opsional)...",
+  },
+  Izin: {
+    label: "Catatan Izin",
+    placeholder: "Jelaskan alasan izin Anda (mis. keperluan keluarga, dinas luar, dll)...",
+  },
+  Sakit: {
+    label: "Catatan Sakit",
+    placeholder: "Jelaskan keluhan / keterangan sakit Anda...",
+  },
+};
+
+function updateCatatanField() {
+  const status = statusKehadiranInput.value;
+  const cfg = CATATAN_CONFIG[status] || CATATAN_CONFIG.Hadir;
+  catatanLabel.textContent = cfg.label;
+  catatanInput.placeholder = cfg.placeholder;
+}
+
 statusKehadiranInput.addEventListener("change", () => {
   const perluLampiran = statusKehadiranInput.value === "Izin" || statusKehadiranInput.value === "Sakit";
   lampiranWrap.style.display = perluLampiran ? "block" : "none";
@@ -163,14 +187,19 @@ statusKehadiranInput.addEventListener("change", () => {
     lampiranDataUrl = null;
     lampiranNamaFile = null;
   }
+  updateCatatanField();
   checkFormReady();
 });
+
+// Set label/placeholder awal sesuai status default saat halaman dimuat
+updateCatatanField();
 
 lampiranFile.addEventListener("change", () => {
   const file = lampiranFile.files[0];
   if (!file) {
     lampiranDataUrl = null;
     lampiranNamaFile = null;
+    checkFormReady();
     return;
   }
   if (file.size > 5 * 1024 * 1024) {
@@ -178,6 +207,7 @@ lampiranFile.addEventListener("change", () => {
     lampiranFile.value = "";
     lampiranDataUrl = null;
     lampiranNamaFile = null;
+    checkFormReady();
     return;
   }
   const reader = new FileReader();
@@ -185,6 +215,7 @@ lampiranFile.addEventListener("change", () => {
     lampiranDataUrl = reader.result;
     lampiranNamaFile = file.name;
     showToast("Lampiran berhasil dipilih: " + file.name, "ok");
+    checkFormReady();
   };
   reader.readAsDataURL(file);
 });
@@ -343,15 +374,23 @@ btnRetake.addEventListener("click", () => {
 // Validasi kesiapan form
 // ==========================================================
 function checkFormReady() {
+  const status = statusKehadiranInput.value;
+  const perluIzinSakit = status === "Izin" || status === "Sakit";
+  const catatanIzinSakitOk = !perluIzinSakit || !!catatanInput.value.trim();
+  const lampiranOk = !perluIzinSakit || !!lampiranDataUrl;
+
   const ready =
     !!capturedDataUrl &&
     photoQualityOk &&
     !!currentPosition &&
-    !!namaInput.value;
+    !!namaInput.value &&
+    catatanIzinSakitOk &&
+    lampiranOk;
   btnSubmit.disabled = !ready;
 }
 namaInput.addEventListener("change", checkFormReady);
 kegiatanInput.addEventListener("change", checkFormReady);
+catatanInput.addEventListener("input", checkFormReady);
 
 // ==========================================================
 // FITUR 7: Riwayat Lokal (localStorage) — per perangkat
@@ -444,6 +483,10 @@ btnSubmit.addEventListener("click", async () => {
   }
   if (!currentPosition) {
     setStatus("Lokasi belum didapat, tunggu sebentar atau nyalakan ulang kamera.", "err");
+    return;
+  }
+  if ((status === "Izin" || status === "Sakit") && !catatan) {
+    setStatus("Isi catatan " + status.toLowerCase() + " terlebih dahulu.", "err");
     return;
   }
   if ((status === "Izin" || status === "Sakit") && !lampiranDataUrl) {

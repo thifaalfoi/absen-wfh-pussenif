@@ -75,6 +75,10 @@ async function initDb() {
     await tambahKolomJikaBelumAda("peserta", "dibuat_pada", "VARCHAR(40)");
     await tambahKolomJikaBelumAda("peserta", "status_pensiun", "VARCHAR(20) DEFAULT 'Aktif'"); // Aktif / Pensiun
     await tambahKolomJikaBelumAda("absen", "terlambat", "VARCHAR(5)");
+    await tambahKolomJikaBelumAda("absen", "status_kehadiran", "VARCHAR(20) DEFAULT 'Hadir'"); // Hadir / Izin / Sakit
+    await tambahKolomJikaBelumAda("absen", "catatan", "TEXT"); // catatan tugas (Hadir) / catatan izin / catatan sakit
+    await tambahKolomJikaBelumAda("absen", "lampiran", "LONGTEXT"); // file surat izin/sakit (base64 data URL)
+    await tambahKolomJikaBelumAda("absen", "lampiran_nama", "VARCHAR(255)");
 
     try {
       await pool.query(`ALTER TABLE absen MODIFY COLUMN foto_path LONGTEXT`);
@@ -127,7 +131,7 @@ const TEMPAT_OPTIONS = ["Pussenif", "Pusdikif"];
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "15mb" }));
+app.use(express.json({ limit: "20mb" }));
 app.use("/uploads", express.static(UPLOAD_DIR));
 
 // PANGGILAN STATIC UTAMA: Mengarah langsung ke folder public
@@ -262,8 +266,22 @@ app.delete("/api/peserta/:id", requireAdminKey, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+const STATUS_KEHADIRAN_OPTIONS = ["Hadir", "Izin", "Sakit"];
+
 app.post("/api/absen", wrap(async (req, res) => {
-  const { nama, foto, lat, lng, akurasi, kegiatan, kegiatan_catatan } = req.body;
+  const {
+    nama,
+    foto,
+    lat,
+    lng,
+    akurasi,
+    kegiatan,
+    kegiatan_catatan,
+    status,
+    catatan,
+    lampiran,
+    lampiran_nama,
+  } = req.body;
 
   if (!nama || !foto || lat == null || lng == null || !kegiatan) {
     return res.status(400).json({ error: "Data tidak lengkap (nama, foto, lokasi, dan kegiatan wajib diisi)." });
@@ -273,6 +291,25 @@ app.post("/api/absen", wrap(async (req, res) => {
   }
   if (kegiatan === "Lainnya" && (!kegiatan_catatan || !kegiatan_catatan.trim())) {
     return res.status(400).json({ error: 'Isi keterangan kegiatan kalau memilih "Lainnya".' });
+  }
+
+  const statusKehadiran = STATUS_KEHADIRAN_OPTIONS.includes(status) ? status : "Hadir";
+  const catatanTrim = (catatan || "").toString().trim();
+
+  if ((statusKehadiran === "Izin" || statusKehadiran === "Sakit")) {
+    if (!catatanTrim) {
+      return res.status(400).json({
+        error: `Isi catatan ${statusKehadiran.toLowerCase()} terlebih dahulu.`,
+      });
+    }
+    if (!lampiran) {
+      return res.status(400).json({
+        error: `Unggah lampiran surat ${statusKehadiran.toLowerCase()} terlebih dahulu.`,
+      });
+    }
+    if (!/^data:(image\/(png|jpeg|jpg)|application\/pdf);base64,/.test(lampiran)) {
+      return res.status(400).json({ error: "Format lampiran tidak valid (harus foto atau PDF)." });
+    }
   }
 
   const [terdaftarRows] = await pool.query(
@@ -314,12 +351,28 @@ app.post("/api/absen", wrap(async (req, res) => {
   const id = crypto.randomUUID();
   const waktu = new Date().toISOString();
   await pool.query(
-    `INSERT INTO absen (id, nama, waktu, lat, lng, akurasi, foto_path, status, kegiatan, kegiatan_catatan, terlambat)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, nama, waktu, lat, lng, akurasi || null, foto, "WFH", kegiatan, kegiatan === "Lainnya" ? kegiatan_catatan.trim() : null, terlambat]
+    `INSERT INTO absen (id, nama, waktu, lat, lng, akurasi, foto_path, status, status_kehadiran, kegiatan, kegiatan_catatan, catatan, lampiran, lampiran_nama, terlambat)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      nama,
+      waktu,
+      lat,
+      lng,
+      akurasi || null,
+      foto,
+      "WFH",
+      statusKehadiran,
+      kegiatan,
+      kegiatan === "Lainnya" ? kegiatan_catatan.trim() : null,
+      catatanTrim || null,
+      statusKehadiran !== "Hadir" ? lampiran : null,
+      statusKehadiran !== "Hadir" ? (lampiran_nama || null) : null,
+      terlambat,
+    ]
   );
 
-  res.json({ ok: true, id, waktu, terlambat });
+  res.json({ ok: true, id, waktu, terlambat, status_kehadiran: statusKehadiran });
 }));
 
 app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
@@ -352,9 +405,14 @@ app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
       // Ubah jadi string kosong agar frontend tidak mencoba meload file fisik lama yang tidak ada
       url = ""; 
     }
+    let lampiranUrl = r.lampiran;
+    if (lampiranUrl && !lampiranUrl.startsWith("data:") && !lampiranUrl.startsWith("http")) {
+      lampiranUrl = "";
+    }
     return {
       ...r,
-      foto_url: url
+      foto_url: url,
+      lampiran_url: lampiranUrl || null,
     };
   });
   res.json({ data, total, page, limit, totalPages: Math.max(Math.ceil(total / limit), 1) });
@@ -372,7 +430,23 @@ app.get("/api/absen/stats", requireAdminKey, wrap(async (req, res) => {
   const [[{ totalPeserta }]] = await pool.query(
     `SELECT COUNT(*) AS totalPeserta FROM peserta WHERE status_pensiun = 'Aktif' OR status_pensiun IS NULL`
   );
-  res.json({ total, hariIni: hariIniCount, orangUnik, terlambatHariIni: terlambatCount, totalPeserta });
+  const [[{ izinHariIni }]] = await pool.query(
+    `SELECT COUNT(*) AS izinHariIni FROM absen WHERE waktu LIKE ? AND status_kehadiran = 'Izin'`,
+    [`${hariIni}%`]
+  );
+  const [[{ sakitHariIni }]] = await pool.query(
+    `SELECT COUNT(*) AS sakitHariIni FROM absen WHERE waktu LIKE ? AND status_kehadiran = 'Sakit'`,
+    [`${hariIni}%`]
+  );
+  res.json({
+    total,
+    hariIni: hariIniCount,
+    orangUnik,
+    terlambatHariIni: terlambatCount,
+    totalPeserta,
+    izinHariIni,
+    sakitHariIni,
+  });
 }));
 
 app.get("/api/absen/export", requireAdminKey, wrap(async (req, res) => {
@@ -391,14 +465,16 @@ app.get("/api/absen/export", requireAdminKey, wrap(async (req, res) => {
   }
 
   const [rows] = await pool.query(
-    `SELECT nama, waktu, status, terlambat, kegiatan, kegiatan_catatan, lat, lng, akurasi FROM absen ${where} ORDER BY waktu DESC`,
+    `SELECT nama, waktu, status, status_kehadiran, terlambat, kegiatan, kegiatan_catatan, catatan, lampiran, lat, lng, akurasi FROM absen ${where} ORDER BY waktu DESC`,
     params
   );
 
-  let csv = "Nama,Waktu,Status,Terlambat,Kegiatan,Catatan Kegiatan,Latitude,Longitude,Akurasi(m)\n";
+  let csv = "Nama,Waktu,Status Kehadiran,Terlambat,Kegiatan,Catatan,Lampiran,Latitude,Longitude,Akurasi(m)\n";
   for (const r of rows) {
     const kegiatanFinal = r.kegiatan === "Lainnya" ? `${r.kegiatan} - ${r.kegiatan_catatan || ""}` : r.kegiatan;
-    csv += `"${r.nama.replace(/"/g, '""')}",${r.waktu},"${r.status || ""}","${r.terlambat || ""}","${kegiatanFinal || ""}","${(r.kegiatan_catatan || "").replace(/"/g, '""')}",${r.lat},${r.lng},${r.akurasi ?? ""}\n`;
+    const kehadiran = r.status_kehadiran || r.status || "Hadir";
+    const adaLampiran = r.lampiran ? "Ada" : "-";
+    csv += `"${r.nama.replace(/"/g, '""')}",${r.waktu},"${kehadiran}","${r.terlambat || ""}","${kegiatanFinal || ""}","${(r.catatan || "").replace(/"/g, '""')}","${adaLampiran}",${r.lat},${r.lng},${r.akurasi ?? ""}\n`;
   }
 
   res.setHeader("Content-Type", "text/csv");
