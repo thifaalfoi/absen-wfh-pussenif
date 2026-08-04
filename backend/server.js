@@ -74,6 +74,8 @@ async function initDb() {
     await tambahKolomJikaBelumAda("peserta", "tempat", "VARCHAR(50)");
     await tambahKolomJikaBelumAda("peserta", "dibuat_pada", "VARCHAR(40)");
     await tambahKolomJikaBelumAda("peserta", "status_pensiun", "VARCHAR(20) DEFAULT 'Aktif'"); // Aktif / Pensiun
+    await tambahKolomJikaBelumAda("peserta", "face_descriptor", "LONGTEXT"); // 128-D face descriptor (JSON array) utk pengenalan wajah
+    await tambahKolomJikaBelumAda("peserta", "foto_wajah", "LONGTEXT"); // foto referensi wajah (base64), utk preview di admin
     await tambahKolomJikaBelumAda("absen", "terlambat", "VARCHAR(5)");
     await tambahKolomJikaBelumAda("absen", "status_kehadiran", "VARCHAR(20) DEFAULT 'Hadir'"); // Hadir / Izin / Sakit
     await tambahKolomJikaBelumAda("absen", "catatan", "TEXT"); // catatan tugas (Hadir) / catatan izin / catatan sakit
@@ -180,10 +182,50 @@ app.get("/api/peserta", wrap(async (req, res) => {
 // Admin: daftar SEMUA peserta (aktif maupun pensiun) buat dikelola di dashboard
 app.get("/api/peserta/admin", requireAdminKey, wrap(async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, dibuat_pada, status_pensiun
+    `SELECT id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, dibuat_pada, status_pensiun, foto_wajah,
+            (face_descriptor IS NOT NULL AND face_descriptor <> '') AS punya_wajah
      FROM peserta ORDER BY status_pensiun ASC, nama_lengkap ASC`
   );
-  res.json(rows);
+  res.json(rows.map((r) => ({ ...r, punya_wajah: !!r.punya_wajah })));
+}));
+
+// Publik: daftar descriptor wajah peserta AKTIF, dipakai halaman absen buat pencocokan wajah di browser.
+// Sengaja TIDAK mengirim foto aslinya, cuma angka descriptor (128-D) supaya ringan & tidak bocorin foto peserta lain.
+app.get("/api/peserta/wajah", wrap(async (req, res) => {
+  const [rows] = await pool.query(
+    `SELECT id, nama_lengkap, face_descriptor FROM peserta
+     WHERE (status_pensiun = 'Aktif' OR status_pensiun IS NULL)
+       AND face_descriptor IS NOT NULL AND face_descriptor <> ''`
+  );
+  const data = rows.map((r) => {
+    let descriptor = [];
+    try {
+      descriptor = JSON.parse(r.face_descriptor);
+    } catch (e) {
+      descriptor = [];
+    }
+    return { id: r.id, nama_lengkap: r.nama_lengkap, descriptor };
+  }).filter((r) => Array.isArray(r.descriptor) && r.descriptor.length === 128);
+  res.json(data);
+}));
+
+// Admin: simpan/perbarui foto wajah referensi + descriptor (dihitung di browser admin pakai face-api.js)
+app.patch("/api/peserta/:id/wajah", requireAdminKey, wrap(async (req, res) => {
+  const { foto_wajah, face_descriptor } = req.body;
+  if (!Array.isArray(face_descriptor) || face_descriptor.length !== 128) {
+    return res.status(400).json({ error: "Descriptor wajah tidak valid. Coba ulangi deteksi wajah." });
+  }
+  await pool.query(
+    `UPDATE peserta SET foto_wajah = ?, face_descriptor = ? WHERE id = ?`,
+    [foto_wajah || null, JSON.stringify(face_descriptor), req.params.id]
+  );
+  res.json({ ok: true });
+}));
+
+// Admin: hapus foto wajah referensi seorang peserta (misal mau daftar ulang)
+app.delete("/api/peserta/:id/wajah", requireAdminKey, wrap(async (req, res) => {
+  await pool.query(`UPDATE peserta SET foto_wajah = NULL, face_descriptor = NULL WHERE id = ?`, [req.params.id]);
+  res.json({ ok: true });
 }));
 
 // Admin: ubah status pensiun seorang peserta (Aktif <-> Pensiun)

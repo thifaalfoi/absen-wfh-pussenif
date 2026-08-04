@@ -9,6 +9,8 @@ const kegiatanCatatanInput = document.getElementById("kegiatanCatatan");
 const statusKehadiranInput = document.getElementById("statusKehadiran");
 const lampiranWrap = document.getElementById("lampiranWrap");
 const lampiranFile = document.getElementById("lampiranFile");
+const wajahBadge = document.getElementById("wajahBadge");
+const wajahText = document.getElementById("wajahText");
 const catatanInput = document.getElementById("catatan");
 const catatanCount = document.getElementById("catatanCount");
 const catatanLabel = document.getElementById("catatanLabel");
@@ -142,6 +144,122 @@ async function loadOpsi() {
 }
 loadOpsi();
 
+// ==========================================================
+// Pengenalan Wajah (face-api.js) — cocokkan selfie dengan wajah
+// peserta yang sudah didaftarkan admin, lalu isi nama otomatis.
+// ==========================================================
+let faceModelsReady = false;
+let faceModelsLoading = null;
+let wajahDescriptors = []; // [{ id, nama_lengkap, descriptor: Float32Array }]
+let wajahDescriptorsLoaded = false;
+const FACE_MATCH_THRESHOLD = 0.55; // makin kecil makin ketat
+
+function setWajahBadge(state, text) {
+  wajahBadge.style.display = text ? "flex" : "none";
+  wajahBadge.className = "loc-badge" + (state ? " " + state : "");
+  wajahText.textContent = text || "";
+}
+
+async function ensureFaceModelsLoaded() {
+  if (faceModelsReady) return true;
+  if (!faceModelsLoading) {
+    faceModelsLoading = (async () => {
+      const MODEL_URL = "/models";
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+      faceModelsReady = true;
+    })();
+  }
+  try {
+    await faceModelsLoading;
+    return true;
+  } catch (err) {
+    faceModelsLoading = null;
+    console.error("Gagal memuat model deteksi wajah:", err);
+    return false;
+  }
+}
+
+async function loadWajahDescriptors() {
+  try {
+    const res = await fetch("/api/peserta/wajah");
+    const data = await res.json();
+    wajahDescriptors = (Array.isArray(data) ? data : []).map((d) => ({
+      id: d.id,
+      nama_lengkap: d.nama_lengkap,
+      descriptor: new Float32Array(d.descriptor),
+    }));
+    wajahDescriptorsLoaded = true;
+  } catch (err) {
+    console.error("Gagal memuat data wajah peserta:", err);
+    wajahDescriptorsLoaded = true; // tetap tandai selesai, walau kosong, biar tidak nunggu selamanya
+  }
+}
+
+// Mulai muat model & data wajah begitu kamera dinyalakan, supaya sudah siap
+// saat pengguna mengambil foto (dijalankan paralel, tidak menghalangi kamera).
+function mulaiPersiapanWajah() {
+  ensureFaceModelsLoaded();
+  if (!wajahDescriptorsLoaded) loadWajahDescriptors();
+}
+
+// Coba cocokkan wajah pada foto yang baru diambil dengan daftar peserta.
+// Kalau cocok, nama di dropdown diisi otomatis (pengguna tetap bisa mengganti manual).
+async function cocokkanWajahDenganPeserta() {
+  if (wajahDescriptors.length === 0) {
+    setWajahBadge("", "");
+    return;
+  }
+
+  setWajahBadge("loading", "Mencocokkan wajah...");
+
+  const siap = await ensureFaceModelsLoaded();
+  if (!wajahDescriptorsLoaded) await loadWajahDescriptors();
+
+  if (!siap) {
+    setWajahBadge("err", "Gagal memuat model pengenalan wajah. Pilih nama secara manual.");
+    return;
+  }
+
+  try {
+    const hasil = await faceapi
+      .detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+
+    if (!hasil) {
+      setWajahBadge("warn", "Wajah tidak terdeteksi jelas pada foto. Silakan pilih nama secara manual.");
+      return;
+    }
+
+    let terbaik = null;
+    let jarakTerkecil = Infinity;
+    for (const p of wajahDescriptors) {
+      const jarak = faceapi.euclideanDistance(hasil.descriptor, p.descriptor);
+      if (jarak < jarakTerkecil) {
+        jarakTerkecil = jarak;
+        terbaik = p;
+      }
+    }
+
+    if (terbaik && jarakTerkecil < FACE_MATCH_THRESHOLD) {
+      const cocokDiDropdown = Array.from(namaInput.options).some((o) => o.value === terbaik.nama_lengkap);
+      if (cocokDiDropdown) {
+        namaInput.value = terbaik.nama_lengkap;
+        namaInput.dispatchEvent(new Event("change"));
+      }
+      const keyakinan = Math.round((1 - jarakTerkecil / FACE_MATCH_THRESHOLD) * 40 + 60); // estimasi kasar, 60-100%
+      setWajahBadge("ok", `Wajah dikenali: ${terbaik.nama_lengkap} (±${keyakinan}% yakin). Cek lagi kalau salah orang.`);
+    } else {
+      setWajahBadge("warn", "Wajah tidak dikenali dari daftar peserta. Silakan pilih nama secara manual.");
+    }
+  } catch (err) {
+    console.error("Gagal mencocokkan wajah:", err);
+    setWajahBadge("err", "Gagal mencocokkan wajah. Silakan pilih nama secara manual.");
+  }
+}
+
 kegiatanInput.addEventListener("change", () => {
   kegiatanCatatanWrap.style.display = kegiatanInput.value === "Lainnya" ? "block" : "none";
 });
@@ -236,6 +354,7 @@ btnCamera.addEventListener("click", async () => {
     setStatus("Kamera aktif. Posisikan wajah lalu ambil foto.", "");
 
     requestLocation();
+    mulaiPersiapanWajah();
   } catch (err) {
     setStatus("Gagal mengakses kamera: " + err.message + " (pastikan izin kamera diaktifkan di browser)", "err");
   }
@@ -356,6 +475,10 @@ btnCapture.addEventListener("click", () => {
   }
 
   checkFormReady();
+
+  if (quality.ok) {
+    cocokkanWajahDenganPeserta();
+  }
 });
 
 btnRetake.addEventListener("click", () => {
@@ -367,6 +490,7 @@ btnRetake.addEventListener("click", () => {
   stampEl.style.display = "none";
   qualityBadge.className = "quality-badge";
   photoQualityOk = false;
+  setWajahBadge("", "");
   btnCamera.click();
 });
 

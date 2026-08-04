@@ -237,6 +237,8 @@
   .loc-badge.ok .loc-dot{ background:var(--green); }
   .loc-badge.err{ border-color:rgba(226,85,77,0.4); color:var(--red); }
   .loc-badge.err .loc-dot{ background:var(--red); }
+  .loc-badge.warn{ border-color:rgba(226,168,61,0.4); color:var(--amber); }
+  .loc-badge.warn .loc-dot{ background:var(--amber); }
   .loc-badge.loading .loc-dot{ background:var(--gold); animation:pulse 1s ease-in-out infinite; }
   @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.3;} }
   .loc-badge #btnRetryLoc{
@@ -381,6 +383,11 @@
     <button type="button" class="btn-secondary" id="btnRetake" style="display:none;">Ulangi</button>
   </div>
 
+  <div class="loc-badge" id="wajahBadge" style="display:none; margin-top:10px;">
+    <div class="loc-dot"></div>
+    <span id="wajahText"></span>
+  </div>
+
   <div class="perforation"></div>
 
   <div class="fields">
@@ -433,6 +440,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

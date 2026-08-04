@@ -454,10 +454,64 @@
       border-color: rgba(226, 168, 61, 0.4);
       background: rgba(226, 168, 61, 0.12);
     }
+
+    /* ---- Pengenalan Wajah (face recognition) ---- */
+    .wajah-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .wajah-thumb {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid rgba(76, 175, 125, 0.5);
+    }
+    .badge-wajah-ok {
+      color: var(--green);
+      border-color: rgba(76, 175, 125, 0.4);
+      background: rgba(76, 175, 125, 0.12);
+    }
+    .badge-wajah-kosong {
+      color: var(--muted);
+      border-color: rgba(136, 145, 168, 0.35);
+      background: rgba(136, 145, 168, 0.08);
+    }
+    .wajah-file-input {
+      display: none;
+    }
+    .btn-wajah {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      background: transparent;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-wajah:hover {
+      background: rgba(212, 175, 55, 0.12);
+    }
+    .btn-wajah:disabled {
+      opacity: 0.5;
+      cursor: wait;
+    }
+    .btn-hapus-wajah {
+      font-size: 11px;
+      color: var(--red);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+    }
   </style>
 </head>
 
 <body>
+  <!-- Library face-api.js: deteksi & pengenalan wajah, jalan di browser -->
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
   <div id="toastContainer"></div>
 
@@ -579,12 +633,14 @@
               <th>Jabatan</th>
               <th>Tempat</th>
               <th>Terdaftar</th>
+              <th>Wajah</th>
               <th style="width:70px">Aksi</th>
             </tr>
           </thead>
           <tbody id="pesertaBody"></tbody>
         </table>
         <div class="empty" id="pesertaEmpty" style="display:none">Belum ada peserta terdaftar.</div>
+        <div class="status" id="wajahStatus" style="padding:0 18px 12px"></div>
       </div>
     </div>
 
@@ -602,7 +658,7 @@
       const tbody = document.getElementById('pesertaBody');
       const empty = document.getElementById('pesertaEmpty');
       try {
-        const res = await fetch('/api/peserta');
+        const res = await fetch('/api/peserta/admin?key=' + encodeURIComponent(adminKey));
         const responseJson = await res.json();
 
         // Ambil array-nya secara aman (mendukung format array langsung atau objek { data: [...] })
@@ -616,6 +672,11 @@
         empty.style.display = 'none';
         for (const p of data) {
           const tr = document.createElement('tr');
+          const wajahCell = p.punya_wajah
+            ? `<img class="wajah-thumb" src="${p.foto_wajah || ''}" alt="wajah ${p.nama_lengkap}" />
+               <span class="badge-status badge-wajah-ok">✓ Terdaftar</span>
+               <button class="btn-hapus-wajah" onclick="hapusWajah('${p.id}')">Hapus</button>`
+            : `<span class="badge-status badge-wajah-kosong">Belum ada</span>`;
           tr.innerHTML = `
         <td>${p.nama_lengkap}</td>
         <td>${p.nrp || '-'}</td>
@@ -624,6 +685,13 @@
         <td>${p.jabatan || '-'}</td>
         <td>${p.tempat || '-'}</td>
         <td class="waktu">${formatTanggalJam(p.dibuat_pada)}</td>
+        <td>
+          <div class="wajah-cell">
+            ${wajahCell}
+            <button class="btn-wajah" onclick="document.getElementById('wajahFile_${p.id}').click()">📷 ${p.punya_wajah ? 'Ganti' : 'Daftarkan'}</button>
+            <input type="file" accept="image/*" class="wajah-file-input" id="wajahFile_${p.id}" onchange="daftarkanWajah('${p.id}', this.files[0], this)" />
+          </div>
+        </td>
         <td><button class="ghost" onclick="hapusPeserta('${p.id}')">Hapus</button></td>
       `;
           tbody.appendChild(tr);
@@ -685,6 +753,127 @@
         loadStats();
       } catch (e) {
         showToast('Gagal menghapus peserta: ' + e.message, 'err');
+      }
+    }
+
+    // ==========================================================
+    // Pengenalan Wajah — daftarkan foto referensi tiap peserta
+    // ==========================================================
+    const wajahStatusEl = document.getElementById('wajahStatus');
+    function setWajahStatus(msg, ok) {
+      wajahStatusEl.textContent = msg;
+      wajahStatusEl.className = 'status' + (ok === true ? ' ok' : ok === false ? ' err' : '');
+    }
+
+    let modelsReady = false;
+    let modelsLoading = null;
+    async function pastikanModelSiap() {
+      if (modelsReady) return true;
+      if (!modelsLoading) {
+        modelsLoading = (async () => {
+          const MODEL_URL = '/models';
+          await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+          await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+          await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+          modelsReady = true;
+        })();
+      }
+      try {
+        await modelsLoading;
+        return true;
+      } catch (e) {
+        modelsLoading = null;
+        console.error('Gagal memuat model wajah:', e);
+        return false;
+      }
+    }
+    // Mulai muat model dari sekarang di background, biar pas admin klik "Daftarkan" sudah siap
+    pastikanModelSiap();
+
+    // Kompres & resize foto ke maksimal 480x480 supaya hemat penyimpanan
+    function resizeGambar(imgEl, maxSize) {
+      const scale = Math.min(1, maxSize / Math.max(imgEl.naturalWidth, imgEl.naturalHeight));
+      const w = Math.round(imgEl.naturalWidth * scale);
+      const h = Math.round(imgEl.naturalHeight * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(imgEl, 0, 0, w, h);
+      return canvas.toDataURL('image/jpeg', 0.85);
+    }
+
+    async function daftarkanWajah(id, file, inputEl) {
+      if (!file) return;
+      const btn = inputEl.previousElementSibling; // tombol "Daftarkan"/"Ganti"
+      if (btn) { btn.disabled = true; btn.textContent = 'Memproses...'; }
+      setWajahStatus('Memuat model deteksi wajah...', null);
+
+      try {
+        const siap = await pastikanModelSiap();
+        if (!siap) {
+          setWajahStatus('Gagal memuat model deteksi wajah. Cek koneksi internet lalu coba lagi.', false);
+          return;
+        }
+
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        const img = await new Promise((resolve, reject) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.onerror = reject;
+          el.src = dataUrl;
+        });
+
+        setWajahStatus('Mendeteksi wajah pada foto...', null);
+        const hasil = await faceapi
+          .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        if (!hasil) {
+          setWajahStatus('Wajah tidak terdeteksi pada foto tersebut. Gunakan foto close-up, pencahayaan cukup, wajah menghadap kamera.', false);
+          return;
+        }
+
+        const fotoKecil = resizeGambar(img, 480);
+        const descriptor = Array.from(hasil.descriptor);
+
+        const res = await fetch(`/api/peserta/${id}/wajah?key=${encodeURIComponent(adminKey)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ foto_wajah: fotoKecil, face_descriptor: descriptor }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setWajahStatus(data.error || 'Gagal menyimpan wajah.', false);
+          return;
+        }
+
+        setWajahStatus('Wajah berhasil didaftarkan.', true);
+        showToast('Wajah berhasil didaftarkan.', 'ok');
+        loadPeserta();
+      } catch (e) {
+        console.error(e);
+        setWajahStatus('Gagal memproses foto: ' + e.message, false);
+      } finally {
+        inputEl.value = '';
+        if (btn) { btn.disabled = false; }
+      }
+    }
+
+    async function hapusWajah(id) {
+      if (!confirm('Hapus foto wajah referensi peserta ini?')) return;
+      try {
+        await fetch(`/api/peserta/${id}/wajah?key=${encodeURIComponent(adminKey)}`, { method: 'DELETE' });
+        showToast('Foto wajah dihapus.', 'ok');
+        loadPeserta();
+      } catch (e) {
+        showToast('Gagal menghapus wajah: ' + e.message, 'err');
       }
     }
 
