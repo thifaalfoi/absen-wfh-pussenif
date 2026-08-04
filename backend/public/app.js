@@ -63,7 +63,7 @@ function updateDayBadge() {
     dayBadge.textContent = `Hari ini: ${namaHari} (Libur)`;
     dayBadge.style.color = "#8891A8";
   } else {
-    dayBadge.textContent = `Hari ini: ${namaHari} (Bukan jadwal WFH)`;
+    dayBadge.textContent = `Hari ini: ${namaHari}`;
     dayBadge.style.color = "#e2554d";
   }
 }
