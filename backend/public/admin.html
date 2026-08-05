@@ -253,6 +253,27 @@
       border-radius: 8px;
       border: 1px solid var(--line);
       display: block;
+      cursor: zoom-in;
+    }
+
+    /* ---- Preview foto membesar saat hover ---- */
+    .photo-hover-preview {
+      position: fixed;
+      z-index: 9999;
+      display: none;
+      padding: 6px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+      pointer-events: none;
+    }
+    .photo-hover-preview img {
+      display: block;
+      width: 280px;
+      height: 280px;
+      object-fit: cover;
+      border-radius: 8px;
     }
 
     .stamp {
@@ -512,6 +533,11 @@
 <body>
   <!-- Library face-api.js: deteksi & pengenalan wajah, jalan di browser -->
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+  <!-- Preview foto membesar saat cursor diarahkan ke foto selfie -->
+  <div id="photoHoverPreview" class="photo-hover-preview">
+    <img id="photoHoverImg" src="" alt="preview foto" />
+  </div>
 
   <div id="toastContainer"></div>
 
@@ -1238,6 +1264,57 @@
         ctx.fillText(d.label, x + barW / 2, height - 6);
       });
     }
+
+    // ==========================================================
+    // Preview foto membesar saat hover ke foto selfie di tabel
+    // (pakai event delegation di document supaya tetap jalan
+    // walau baris tabel di-render ulang lewat innerHTML)
+    // ==========================================================
+    (function () {
+      const preview = document.getElementById('photoHoverPreview');
+      const previewImg = document.getElementById('photoHoverImg');
+      const MARGIN = 18;
+
+      function posisikanPreview(clientX, clientY) {
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const boxW = preview.offsetWidth || 300;
+        const boxH = preview.offsetHeight || 300;
+
+        let left = clientX + MARGIN;
+        let top = clientY + MARGIN;
+
+        if (left + boxW > vw) left = clientX - boxW - MARGIN;
+        if (top + boxH > vh) top = clientY - boxH - MARGIN;
+        if (left < 0) left = MARGIN;
+        if (top < 0) top = MARGIN;
+
+        preview.style.left = left + 'px';
+        preview.style.top = top + 'px';
+      }
+
+      document.addEventListener('mouseover', (e) => {
+        const img = e.target.closest('img.thumb');
+        if (!img || !img.src) return;
+        previewImg.src = img.src;
+        preview.style.display = 'block';
+        posisikanPreview(e.clientX, e.clientY);
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (preview.style.display === 'block') {
+          posisikanPreview(e.clientX, e.clientY);
+        }
+      });
+
+      document.addEventListener('mouseout', (e) => {
+        const img = e.target.closest('img.thumb');
+        if (!img) return;
+        if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('img.thumb') === img) return;
+        preview.style.display = 'none';
+        previewImg.src = '';
+      });
+    })();
   </script>
 
 </body>
