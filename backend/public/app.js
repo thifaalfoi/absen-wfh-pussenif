@@ -57,15 +57,8 @@ function updateDayBadge() {
   const dow = today.getDay(); // 0=Minggu ... 6=Sabtu
   const namaHari = HARI[dow];
 
-  if (dow === 5) {
-    dayBadge.textContent = `Hari ini: ${namaHari} (Jadwal WFH)`;
-  } else if (dow === 0 || dow === 6) {
-    dayBadge.textContent = `Hari ini: ${namaHari} (Libur)`;
-    dayBadge.style.color = "#8891A8";
-  } else {
-    dayBadge.textContent = `Hari ini: ${namaHari}`;
-    dayBadge.style.color = "#e2554d";
-  }
+  // Sementara dibuka setiap hari (bukan cuma Jumat)
+  dayBadge.textContent = `Hari ini: ${namaHari} (Jadwal WFH)`;
 }
 updateDayBadge();
 

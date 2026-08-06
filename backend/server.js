@@ -362,9 +362,10 @@ app.post("/api/absen", wrap(async (req, res) => {
     return res.status(403).json({ error: "Nama tidak terdaftar sebagai peserta aktif. Hubungi admin kalau nama kamu belum ada di daftar atau sudah pensiun." });
   }
 
-  // if (!isFridayNow()) {
-  //   return res.status(403).json({ error: "Absen WFH hanya dibuka setiap hari Jumat." });
-  // }
+  if (!isFridayNow()) {
+    // Sementara dinonaktifkan: absen dibuka setiap hari, bukan cuma Jumat.
+    // return res.status(403).json({ error: "Absen WFH hanya dibuka setiap hari Jumat." });
+  }
 
   const sekarang = waktuJakartaSekarang();
   const menitSekarang = menitSejakTengahMalam(sekarang);
