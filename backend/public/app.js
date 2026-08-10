@@ -54,11 +54,20 @@ btnMulai.addEventListener("click", () => {
 
 function updateDayBadge() {
   const today = new Date();
-  const dow = today.getDay(); // 0=Minggu ... 6=Sabtu
+  const dow = today.getDay(); // 0=Minggu, 1=Senin, 2=Selasa, 3=Rabu, 4=Kamis, 5=Jumat, 6=Sabtu
   const namaHari = HARI[dow];
 
-  // Sementara dibuka setiap hari (bukan cuma Jumat)
-  dayBadge.textContent = `Hari ini: ${namaHari} (Jadwal WFH)`;
+  // Jika hari Jumat (5), tampilkan keterangan WFH. Hari lain tidak usah.
+  if (dow === 5) {
+    dayBadge.textContent = `Hari ini: ${namaHari} (Jadwal WFH)`;
+    dayBadge.style.display = "inline-flex"; // atau sesuaikan tampilannya
+  } else if (dow >= 1 && dow <= 4) {
+    // Senin sampai Kamis (bukan WFH, tapi web tetap bisa dibuka/absen)
+    dayBadge.textContent = `Hari ini: ${namaHari}`;
+  } else {
+    // Sabtu & Minggu (opsional jika ingin diberi keterangan libur)
+    dayBadge.textContent = `Hari ini: ${namaHari} (Libur)`;
+  }
 }
 updateDayBadge();
 
