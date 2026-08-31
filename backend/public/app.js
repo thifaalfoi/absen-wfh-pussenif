@@ -3,6 +3,7 @@ const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const preview = document.getElementById("preview");
 const namaInput = document.getElementById("nama");
+const nrpInfo = document.getElementById("nrpInfo");
 const kegiatanInput = document.getElementById("kegiatan");
 const kegiatanCatatanWrap = document.getElementById("kegiatanLainnyaWrap");
 const kegiatanCatatanInput = document.getElementById("kegiatanCatatan");
@@ -101,6 +102,22 @@ function setStatus(msg, type) {
 // ==========================================================
 // Daftar peserta & kegiatan (dari API, dengan fallback aman)
 // ==========================================================
+let pesertaByNama = {}; // { "Nama Lengkap": { nrp, jenis, bagian, jabatan, tempat } }
+
+function tampilkanNrp() {
+  const data = pesertaByNama[namaInput.value];
+  if (data && data.nrp) {
+    nrpInfo.textContent = "NRP: " + data.nrp;
+    nrpInfo.style.display = "block";
+  } else if (namaInput.value) {
+    nrpInfo.textContent = "NRP tidak tercatat untuk peserta ini.";
+    nrpInfo.style.display = "block";
+  } else {
+    nrpInfo.style.display = "none";
+  }
+}
+namaInput.addEventListener("change", tampilkanNrp);
+
 async function loadPeserta() {
   namaInput.innerHTML = `<option value="">Memuat daftar peserta...</option>`;
   try {
@@ -109,6 +126,7 @@ async function loadPeserta() {
     const list = Array.isArray(data) ? data : data.data || data.peserta || [];
 
     namaInput.innerHTML = `<option value="">— pilih nama dari daftar peserta —</option>`;
+    pesertaByNama = {};
     for (const p of list) {
       const namaVal = p.nama_lengkap || p.nama || p.fullname || p;
       if (!namaVal) continue;
@@ -116,6 +134,13 @@ async function loadPeserta() {
       opt.value = namaVal;
       opt.textContent = namaVal;
       namaInput.appendChild(opt);
+      pesertaByNama[namaVal] = {
+        nrp: p.nrp || "",
+        jenis: p.jenis || "",
+        bagian: p.bagian || "",
+        jabatan: p.jabatan || "",
+        tempat: p.tempat || "",
+      };
     }
     if (list.length === 0) {
       namaInput.innerHTML = `<option value="">— daftar peserta masih kosong —</option>`;
