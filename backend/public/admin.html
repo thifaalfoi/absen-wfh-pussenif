@@ -698,6 +698,7 @@
               <th>Catatan</th>
               <th>Lampiran</th>
               <th>Lokasi</th>
+              <th style="width:70px">Aksi</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -776,7 +777,6 @@
         const res = await fetch('/api/peserta/admin?key=' + encodeURIComponent(adminKey));
         const responseJson = await res.json();
 
-        // Ambil array-nya secara aman (mendukung format array langsung atau objek { data: [...] })
         const data = Array.isArray(responseJson) ? responseJson : (responseJson.data || responseJson.peserta || []);
 
         tbody.innerHTML = '';
@@ -862,7 +862,6 @@
 
     // ==========================================================
     // Modal konfirmasi kustom — pengganti confirm() bawaan browser
-    // Pemakaian: const ok = await showConfirm({ title, message, confirmText, danger });
     // ==========================================================
     const confirmOverlay = document.getElementById('confirmOverlay');
     const confirmBox = document.getElementById('confirmBox');
@@ -930,6 +929,29 @@
       }
     }
 
+    // Fungsi untuk menghapus data absen (termasuk foto error/crash)
+    async function hapusAbsen(id) {
+      const ok = await showConfirm({
+        title: 'Hapus data absen ini?',
+        message: 'Data absen atau foto yang error/crash ini akan dihapus permanen.',
+        confirmText: 'Hapus',
+      });
+      if (!ok) return;
+      try {
+        const res = await fetch('/api/absen/' + id + '?key=' + encodeURIComponent(adminKey), { method: 'DELETE' });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Gagal menghapus dari server');
+        }
+        showToast('Data absen berhasil dihapus.', 'ok');
+        loadData();
+        loadStats();
+        loadWeeklyChart();
+      } catch (e) {
+        showToast('Gagal menghapus absen: ' + e.message, 'err');
+      }
+    }
+
     // ==========================================================
     // Pengenalan Wajah — daftarkan foto referensi tiap peserta
     // ==========================================================
@@ -961,10 +983,8 @@
         return false;
       }
     }
-    // Mulai muat model dari sekarang di background, biar pas admin klik "Daftarkan" sudah siap
     pastikanModelSiap();
 
-    // Kompres & resize foto ke maksimal 480x480 supaya hemat penyimpanan
     function resizeGambar(imgEl, maxSize) {
       const scale = Math.min(1, maxSize / Math.max(imgEl.naturalWidth, imgEl.naturalHeight));
       const w = Math.round(imgEl.naturalWidth * scale);
@@ -978,7 +998,7 @@
 
     async function daftarkanWajah(id, file, inputEl) {
       if (!file) return;
-      const btn = inputEl.previousElementSibling; // tombol "Daftarkan"/"Ganti"
+      const btn = inputEl.previousElementSibling;
       if (btn) { btn.disabled = true; btn.textContent = 'Memproses...'; }
       setWajahStatus('Memuat model deteksi wajah...', null);
 
@@ -1056,7 +1076,6 @@
       }
     }
 
-    // ---- Upload Excel: baca file di browser (pakai SheetJS), lalu kirim ke server ----
     function cariNilaiKolom(row, kandidatNama) {
       for (const key of Object.keys(row)) {
         const keyBersih = key.toString().trim().toLowerCase();
@@ -1082,7 +1101,6 @@
           return;
         }
 
-        // Cocokkan nama kolom Excel (fleksibel, gak peduli besar/kecil huruf)
         const peserta = rows.map(row => ({
           nama_lengkap: cariNilaiKolom(row, ['nama', 'nama lengkap', 'nama_lengkap']),
           nrp: cariNilaiKolom(row, ['nrp']),
@@ -1217,11 +1235,15 @@
             const lampiranCell = row.lampiran_url
               ? `<a class="lampiranlink" target="_blank" href="${row.lampiran_url}">📎 Lihat</a>`
               : '<span style="color:var(--muted)">—</span>';
+            
+            // ID record pendukung (bisa ID database dari row.id atau row._id)
+            const recordId = row.id || row._id || '';
+
             tr.innerHTML = `
               <td>
                 <div class="who">
                   <div class="thumb-wrap">
-                    <img class="thumb" src="${row.foto_url}" alt="selfie" />
+                    <img class="thumb" src="${row.foto_url}" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'46\' height=\'46\'><rect width=\'100%\' height=\'100%\' fill=\'%231b3527\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'central\' text-anchor=\'middle\' fill=\'%238891A8\' font-size=\'10px\'>Error</text></svg>';" alt="selfie" />
                     <div class="stamp">✓</div> 
                   </div>
                   <span class="nama">${row.nama}</span>
@@ -1236,6 +1258,7 @@
               <td class="catatan-cell">${catatanText}</td>
               <td>${lampiranCell}</td>
               <td><a class="maplink" target="_blank" href="https://www.google.com/maps?q=${row.lat},${row.lng}">Lihat di peta ↗</a></td>
+              <td><button class="ghost" style="color:var(--red); border-color:rgba(226,85,77,0.4);" onclick="hapusAbsen('${recordId}')">Hapus</button></td>
             `;
             tbody.appendChild(tr);
           }
@@ -1263,7 +1286,7 @@
     document.getElementById('tanggal').addEventListener('change', () => { page = 1; loadData(); });
 
     // ==========================================================
-    // FITUR 6: Toast Notification Beranimasi
+    // Toast Notification Beranimasi
     // ==========================================================
     const toastContainer = document.getElementById('toastContainer');
     function showToast(msg, type, duration) {
@@ -1291,7 +1314,7 @@
     }
 
     // ==========================================================
-    // FITUR 2: Ekspor ke Excel (.xlsx), memakai SheetJS yang sudah dimuat
+    // Ekspor ke Excel (.xlsx)
     // ==========================================================
     async function exportExcel() {
       const search = document.getElementById('search').value.trim();
@@ -1335,9 +1358,7 @@
     }
 
     // ==========================================================
-    // FITUR 5: Statistik & grafik kehadiran ringkas
-    // Sementara dibuka setiap hari (bukan cuma Jumat), jadi grafik
-    // menampilkan 6 hari kalender terakhir.
+    // Statistik & grafik kehadiran ringkas
     // ==========================================================
     async function loadWeeklyChart() {
       const canvas = document.getElementById('weeklyChart');
@@ -1345,7 +1366,6 @@
       const days = [];
       const today = new Date();
 
-      // 6 hari kalender terakhir (termasuk hari ini)
       for (let i = 5; i >= 0; i--) {
         const d = new Date(today);
         d.setDate(d.getDate() - i);
@@ -1364,9 +1384,7 @@
             if (day) day.count++;
           }
         }
-      } catch (e) {
-        // Grafik tetap ditampilkan kosong bila gagal memuat data
-      }
+      } catch (e) {}
 
       drawBarChart(ctx, canvas.width, canvas.height, days);
     }
@@ -1403,9 +1421,7 @@
     }
 
     // ==========================================================
-    // Preview foto membesar saat hover ke foto selfie di tabel
-    // (pakai event delegation di document supaya tetap jalan
-    // walau baris tabel di-render ulang lewat innerHTML)
+    // Preview foto membesar saat hover
     // ==========================================================
     (function () {
       const preview = document.getElementById('photoHoverPreview');
