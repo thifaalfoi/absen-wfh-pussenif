@@ -930,27 +930,32 @@
     }
 
     // Fungsi untuk menghapus data absen (termasuk foto error/crash)
-    async function hapusAbsen(id) {
-      const ok = await showConfirm({
-        title: 'Hapus data absen ini?',
-        message: 'Data absen atau foto yang error/crash ini akan dihapus permanen.',
-        confirmText: 'Hapus',
-      });
-      if (!ok) return;
-      try {
-        const res = await fetch('/api/absen/' + id + '?key=' + encodeURIComponent(adminKey), { method: 'DELETE' });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || 'Gagal menghapus dari server');
-        }
-        showToast('Data absen berhasil dihapus.', 'ok');
-        loadData();
-        loadStats();
-        loadWeeklyChart();
-      } catch (e) {
-        showToast('Gagal menghapus absen: ' + e.message, 'err');
-      }
+   async function hapusAbsen(id) {
+  const ok = await showConfirm({
+    title: 'Hapus data absen ini?',
+    message: 'Data absen atau foto yang error/crash ini akan dihapus permanen.',
+    confirmText: 'Hapus',
+  });
+  if (!ok) return;
+  try {
+    // Perhatikan bagian method: 'DELETE' di bawah ini
+    const res = await fetch('/api/absen/' + id + '?key=' + encodeURIComponent(adminKey), { 
+      method: 'DELETE' 
+    });
+    
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Gagal menghapus dari server');
     }
+    
+    showToast('Data absen berhasil dihapus.', 'ok');
+    loadData();
+    loadStats();
+    loadWeeklyChart();
+  } catch (e) {
+    showToast('Gagal menghapus absen: ' + e.message, 'err');
+  }
+}
 
     // ==========================================================
     // Pengenalan Wajah — daftarkan foto referensi tiap peserta
