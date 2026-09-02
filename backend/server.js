@@ -461,6 +461,11 @@ app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
   res.json({ data, total, page, limit, totalPages: Math.max(Math.ceil(total / limit), 1) });
 }));
 
+app.delete("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
+  await pool.query(`DELETE FROM absen WHERE id = ?`, [req.params.id]);
+  res.json({ ok: true });
+}));
+
 app.get("/api/absen/stats", requireAdminKey, wrap(async (req, res) => {
   const { tanggal: hariIni } = waktuJakartaSekarang();
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM absen`);
