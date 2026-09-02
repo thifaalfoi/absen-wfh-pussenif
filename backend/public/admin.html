@@ -748,6 +748,7 @@
               <th>Bagian</th>
               <th>Jabatan</th>
               <th>Tempat</th>
+              <th>Status Pegawai</th>
               <th>Terdaftar</th>
               <th>Wajah</th>
               <th style="width:70px">Aksi</th>
@@ -770,6 +771,7 @@
       if (!iso) return '-';
       return new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
     }
+    
     async function loadPeserta() {
       const tbody = document.getElementById('pesertaBody');
       const empty = document.getElementById('pesertaEmpty');
@@ -787,32 +789,78 @@
         empty.style.display = 'none';
         for (const p of data) {
           const tr = document.createElement('tr');
+          const isPensiun = p.status_pensiun === 1 || p.status_pensiun === true || p.status === 'pensiun';
+          
+          const statusPensiunBadge = isPensiun 
+            ? `<span class="badge-status" style="color:var(--red); border-color:rgba(226,85,77,0.4); background:rgba(226,85,77,0.12);">Pensiun</span>`
+            : `<span class="badge-status" style="color:var(--green); border-color:rgba(76,175,125,0.4); background:rgba(76,175,125,0.12);">Aktif</span>`;
+
+          const tombolStatusPensiun = isPensiun
+            ? `<button class="ghost" style="font-size:11px; padding:2px 8px; color:var(--green); border-color:var(--green);" onclick="ubahStatusPensiun('${p.id}', 0)">Jadikan Aktif</button>`
+            : `<button class="ghost" style="font-size:11px; padding:2px 8px; color:var(--red); border-color:var(--red);" onclick="ubahStatusPensiun('${p.id}', 1)">Pensiunkan</button>`;
+
           const wajahCell = p.punya_wajah
             ? `<img class="wajah-thumb" src="${p.foto_wajah || ''}" alt="wajah ${p.nama_lengkap}" />
                <span class="badge-status badge-wajah-ok">✓ Terdaftar</span>
                <button class="btn-hapus-wajah" onclick="hapusWajah('${p.id}')">Hapus</button>`
             : `<span class="badge-status badge-wajah-kosong">Belum ada</span>`;
+
           tr.innerHTML = `
-        <td>${p.nama_lengkap}</td>
-        <td>${p.nrp || '-'}</td>
-        <td>${p.jenis || '-'}</td>
-        <td>${p.bagian || '-'}</td>
-        <td>${p.jabatan || '-'}</td>
-        <td>${p.tempat || '-'}</td>
-        <td class="waktu">${formatTanggalJam(p.dibuat_pada)}</td>
-        <td>
-          <div class="wajah-cell">
-            ${wajahCell}
-            <button class="btn-wajah" onclick="document.getElementById('wajahFile_${p.id}').click()">📷 ${p.punya_wajah ? 'Ganti' : 'Daftarkan'}</button>
-            <input type="file" accept="image/*" class="wajah-file-input" id="wajahFile_${p.id}" onchange="daftarkanWajah('${p.id}', this.files[0], this)" />
-          </div>
-        </td>
-        <td><button class="ghost" onclick="hapusPeserta('${p.id}')">Hapus</button></td>
-      `;
+            <td>${p.nama_lengkap}</td>
+            <td>${p.nrp || '-'}</td>
+            <td>${p.jenis || '-'}</td>
+            <td>${p.bagian || '-'}</td>
+            <td>${p.jabatan || '-'}</td>
+            <td>${p.tempat || '-'}</td>
+            <td>
+              <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                ${statusPensiunBadge}
+                ${tombolStatusPensiun}
+              </div>
+            </td>
+            <td class="waktu">${formatTanggalJam(p.dibuat_pada)}</td>
+            <td>
+              <div class="wajah-cell">
+                ${wajahCell}
+                <button class="btn-wajah" onclick="document.getElementById('wajahFile_${p.id}').click()">📷 ${p.punya_wajah ? 'Ganti' : 'Daftarkan'}</button>
+                <input type="file" accept="image/*" class="wajah-file-input" id="wajahFile_${p.id}" onchange="daftarkanWajah('${p.id}', this.files[0], this)" />
+              </div>
+            </td>
+            <td><button class="ghost" onclick="hapusPeserta('${p.id}')">Hapus</button></td>
+          `;
           tbody.appendChild(tr);
         }
       } catch (e) {
         console.error("Gagal memuat peserta:", e);
+      }
+    }
+
+    async function ubahStatusPensiun(id, statusPensiun) {
+      const statusText = statusPensiun === 1 ? 'mempensiunkan' : 'mengaktifkan kembali';
+      const ok = await showConfirm({
+        title: 'Ubah status pegawai?',
+        message: `Anda yakin ingin ${statusText} peserta ini?`,
+        confirmText: 'Ya, Ubah',
+      });
+      if (!ok) return;
+
+      try {
+        const res = await fetch(`/api/peserta/${id}/status?key=` + encodeURIComponent(adminKey), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status_pensiun: statusPensiun })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Gagal mengubah status di server');
+        }
+
+        showToast('Status peserta berhasil diperbarui.', 'ok');
+        loadPeserta();
+        loadStats();
+      } catch (e) {
+        showToast('Gagal memperbarui status: ' + e.message, 'err');
       }
     }
 
@@ -929,33 +977,31 @@
       }
     }
 
-    // Fungsi untuk menghapus data absen (termasuk foto error/crash)
-   async function hapusAbsen(id) {
-  const ok = await showConfirm({
-    title: 'Hapus data absen ini?',
-    message: 'Data absen atau foto yang error/crash ini akan dihapus permanen.',
-    confirmText: 'Hapus',
-  });
-  if (!ok) return;
-  try {
-    // Perhatikan bagian method: 'DELETE' di bawah ini
-    const res = await fetch('/api/absen/' + id + '?key=' + encodeURIComponent(adminKey), { 
-      method: 'DELETE' 
-    });
-    
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || 'Gagal menghapus dari server');
+    async function hapusAbsen(id) {
+      const ok = await showConfirm({
+        title: 'Hapus data absen ini?',
+        message: 'Data absen atau foto yang error/crash ini akan dihapus permanen.',
+        confirmText: 'Hapus',
+      });
+      if (!ok) return;
+      try {
+        const res = await fetch('/api/absen/' + id + '?key=' + encodeURIComponent(adminKey), { 
+          method: 'DELETE' 
+        });
+        
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Gagal menghapus dari server');
+        }
+        
+        showToast('Data absen berhasil dihapus.', 'ok');
+        loadData();
+        loadStats();
+        loadWeeklyChart();
+      } catch (e) {
+        showToast('Gagal menghapus absen: ' + e.message, 'err');
+      }
     }
-    
-    showToast('Data absen berhasil dihapus.', 'ok');
-    loadData();
-    loadStats();
-    loadWeeklyChart();
-  } catch (e) {
-    showToast('Gagal menghapus absen: ' + e.message, 'err');
-  }
-}
 
     // ==========================================================
     // Pengenalan Wajah — daftarkan foto referensi tiap peserta
@@ -1241,7 +1287,6 @@
               ? `<a class="lampiranlink" target="_blank" href="${row.lampiran_url}">📎 Lihat</a>`
               : '<span style="color:var(--muted)">—</span>';
             
-            // ID record pendukung (sesuaikan dengan properti unik dari database Anda, misal: row._id atau row.id)
             const recordId = row._id || row.id || row.id_absen || '';
 
             tr.innerHTML = `
