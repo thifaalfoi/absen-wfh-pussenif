@@ -1237,7 +1237,8 @@
               : '<span style="color:var(--muted)">—</span>';
             
             // ID record pendukung (bisa ID database dari row.id atau row._id)
-            const recordId = row.id || row._id || '';
+            // ID record pendukung (sesuaikan dengan properti unik dari database Anda, misal: row._id atau row.id)
+            const recordId = row._id || row.id || row.id_absen || '';
 
             tr.innerHTML = `
               <td>
