@@ -634,8 +634,10 @@
   <header>
     <div class="brand">
       <img src="logo-pussenif.png" alt="Logo Pussenif" style="width:110px; height:auto; margin-bottom:18px; border-radius:8px;" />
-      <p>Rekap kehadiran WFH — foto, waktu, dan titik lokasi tiap check-in.</p>
     </div>
+    <div style="text-align: right;">
+      <h1>Registri Absen</h1>
+      <p>Rekap kehadiran WFH — foto, waktu, dan titik lokasi tiap check-in.</p>
     </div>
   </header>
 
@@ -645,7 +647,7 @@
       <div class="mark-lg">Akses Terbatas</div>
       <p style="color:var(--muted); margin-bottom:18px;">Masukkan kunci admin untuk membuka registri.</p>
       <input type="password" id="adminKeyLocked" placeholder="Kunci admin" style="width:240px" />
-<button type="button" onclick="unlock(event)">Buka</button>
+      <button type="button" onclick="unlock()">Buka</button>
       <div class="status" id="lockStatus" style="margin-top:10px"></div>
     </div>
 
@@ -1159,8 +1161,7 @@
       loadData();
     }
 
-   async function loadStats() {
-    if (event) event.preventDefault();
+    async function loadStats() {
       try {
         const res = await fetch('/api/absen/stats?key=' + encodeURIComponent(adminKey));
         const s = await res.json();
