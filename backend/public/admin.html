@@ -208,6 +208,59 @@
       white-space: nowrap;
       margin-right: 6px;
     }
+
+    /* ---- Toggle switch status Aktif/Pensiun ---- */
+    .pensiun-cell {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .pensiun-switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+      flex: none;
+    }
+    .pensiun-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .pensiun-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: rgba(226, 85, 77, 0.35);
+      border: 1px solid rgba(226, 85, 77, 0.6);
+      border-radius: 999px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .pensiun-slider::before {
+      content: "";
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      left: 2px;
+      top: 2px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .pensiun-switch input:checked + .pensiun-slider {
+      background: rgba(76, 175, 125, 0.35);
+      border-color: rgba(76, 175, 125, 0.6);
+    }
+    .pensiun-switch input:checked + .pensiun-slider::before {
+      transform: translateX(18px);
+    }
+    .pensiun-label {
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .pensiun-label.is-aktif { color: var(--green); }
+    .pensiun-label.is-pensiun { color: var(--red); }
     .btn-table-action:hover {
       background: var(--gold);
       color: #1a1a1a;
@@ -833,14 +886,15 @@
         empty.style.display = 'none';
         for (const p of data) {
           const tr = document.createElement('tr');
-          const isPensiun = p.status_pensiun === 1 || p.status_pensiun === true || p.status === 'pensiun';
+          const isPensiun = p.status_pensiun === 'Pensiun' || p.status_pensiun === 1 || p.status_pensiun === true;
 
-          const statusBtnText = isPensiun ? 'Status: Pensiun (Ubah ke Aktif)' : 'Status: Aktif (Ubah ke Pensiun)';
-          const statusBtnStyle = isPensiun 
-            ? 'background: rgba(226, 85, 77, 0.15); color: var(--red); border: 1px solid rgba(226, 85, 77, 0.4); font-size: 11.5px; padding: 4px 10px; border-radius: 6px; font-weight: 600;'
-            : 'background: rgba(76, 175, 125, 0.15); color: var(--green); border: 1px solid rgba(76, 175, 125, 0.4); font-size: 11.5px; padding: 4px 10px; border-radius: 6px; font-weight: 600;';
-          
-          const tombolStatusPensiun = `<button style="${statusBtnStyle}" onclick="ubahStatusPensiun('${p.id}', ${isPensiun ? 0 : 1})">${statusBtnText}</button>`;
+          const toggleStatusPensiun = `
+            <label class="pensiun-switch">
+              <input type="checkbox" ${isPensiun ? '' : 'checked'} onchange="ubahStatusPensiun('${p.id}', this.checked ? 0 : 1)" />
+              <span class="pensiun-slider"></span>
+            </label>
+            <span class="pensiun-label ${isPensiun ? 'is-pensiun' : 'is-aktif'}">${isPensiun ? 'Pensiun' : 'Aktif'}</span>
+          `;
 
           const wajahCell = p.punya_wajah
             ? `<img class="wajah-thumb" src="${p.foto_wajah || ''}" alt="wajah ${p.nama_lengkap}" />
@@ -854,7 +908,11 @@
             <td>${p.bagian || '-'}</td>
             <td>${p.jabatan || '-'}</td>
             <td>${p.tempat || '-'}</td>
-            <td>${tombolStatusPensiun}</td>
+            <td>
+              <div class="pensiun-cell">
+                ${toggleStatusPensiun}
+              </div>
+            </td>
             <td class="waktu">${formatTanggalJam(p.dibuat_pada)}</td>
             <td>
               <div class="wajah-cell">
@@ -1621,4 +1679,3 @@
   </script>
 </body>
 </html>
-```[cite: 5]
