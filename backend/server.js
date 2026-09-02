@@ -466,6 +466,47 @@ app.delete("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Admin: update sebagian data absen (nama, status kehadiran, kegiatan, catatan)
+app.patch("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
+  const { nama, status_kehadiran, kegiatan, catatan } = req.body;
+  const fields = [];
+  const params = [];
+
+  if (nama !== undefined) {
+    if (!nama || !nama.toString().trim()) {
+      return res.status(400).json({ error: "Nama tidak boleh kosong." });
+    }
+    fields.push("nama = ?");
+    params.push(nama.toString().trim());
+  }
+  if (status_kehadiran !== undefined) {
+    if (!STATUS_KEHADIRAN_OPTIONS.includes(status_kehadiran)) {
+      return res.status(400).json({ error: "Status kehadiran tidak valid." });
+    }
+    fields.push("status_kehadiran = ?");
+    params.push(status_kehadiran);
+  }
+  if (kegiatan !== undefined) {
+    fields.push("kegiatan = ?");
+    params.push(kegiatan.toString().trim() || null);
+  }
+  if (catatan !== undefined) {
+    fields.push("catatan = ?");
+    params.push(catatan.toString().trim() || null);
+  }
+
+  if (fields.length === 0) {
+    return res.status(400).json({ error: "Tidak ada data yang diubah." });
+  }
+
+  params.push(req.params.id);
+  const [result] = await pool.query(`UPDATE absen SET ${fields.join(", ")} WHERE id = ?`, params);
+  if (result.affectedRows === 0) {
+    return res.status(404).json({ error: "Data absen tidak ditemukan." });
+  }
+  res.json({ ok: true });
+}));
+
 app.get("/api/absen/stats", requireAdminKey, wrap(async (req, res) => {
   const { tanggal: hariIni } = waktuJakartaSekarang();
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM absen`);

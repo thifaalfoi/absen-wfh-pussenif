@@ -11,25 +11,15 @@
   <style>
     :root {
       --bg: #0b1a11;
-      /* Hijau gelap pekat untuk latar belakang utama */
       --panel: #13271d;
-      /* Hijau tua gelap untuk kartu/panel utama */
       --panel-2: #1b3527;
-      /* Hijau tua sedikit lebih terang untuk input/elemen */
       --line: #2d4a3b;
-      /* Garis pembatas/border yang pas */
       --text: #f8f9fa;
-      /* Putih tulang untuk teks */
       --muted: #8891A8;
-      /* Abu-abu teks sekunder */
       --gold: #D4A73C;
-      /* Emas khas TNI */
       --gold-dim: #8a7431;
-      /* Emas pudar untuk focus */
       --green: #4CAF7D;
-      /* Hijau status OK */
       --red: #E2554D;
-      /* Merah status error */
     }
 
     * {
@@ -60,25 +50,6 @@
       display: flex;
       align-items: center;
       gap: 14px;
-    }
-
-    .brand-logo {
-      width: 56px;
-      height: auto;
-      flex: none;
-      filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.4));
-    }
-
-    .brand .mark {
-      font-family: 'Fraunces', serif;
-      font-weight: 600;
-      font-size: 15px;
-      color: var(--gold);
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      border: 1px solid var(--gold-dim);
-      padding: 3px 9px;
-      border-radius: 3px;
     }
 
     header h1 {
@@ -148,7 +119,8 @@
     }
 
     input,
-    button {
+    button,
+    select {
       font-family: 'Inter', sans-serif;
       font-size: 13.5px;
     }
@@ -209,7 +181,72 @@
 
     table {
       width: 100%;
+      min-width: 760px;
       border-collapse: collapse;
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .table-scroll table {
+      min-width: 900px;
+    }
+    @media (max-width: 700px) {
+      .table-scroll table { min-width: 640px; }
+    }
+
+    .btn-table-action {
+      background: rgba(212, 167, 60, 0.15);
+      color: var(--gold);
+      border: 1px solid rgba(212, 167, 60, 0.4);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      margin-right: 6px;
+    }
+    .btn-table-action:hover {
+      background: var(--gold);
+      color: #1a1a1a;
+      border-color: var(--gold);
+    }
+    .aksi-cell {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .edit-field {
+      margin-bottom: 14px;
+    }
+    .edit-field label {
+      display: block;
+      font-size: 11.5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .edit-field input,
+    .edit-field select,
+    .edit-field textarea {
+      width: 100%;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-size: 13.5px;
+      font-family: inherit;
+    }
+    .edit-field textarea {
+      resize: vertical;
+      min-height: 60px;
     }
 
     th,
@@ -256,7 +293,6 @@
       cursor: zoom-in;
     }
 
-    /* ---- Preview foto membesar saat hover ---- */
     .photo-hover-preview {
       position: fixed;
       z-index: 9999;
@@ -347,7 +383,6 @@
       margin-bottom: 8px;
     }
 
-    /* ---- Toast notifications ---- */
     #toastContainer {
       position: fixed;
       top: 18px;
@@ -387,33 +422,18 @@
       flex: none;
     }
 
-    .toast.ok .dot {
-      background: var(--green);
-    }
-
-    .toast.err .dot {
-      background: var(--red);
-    }
-
-    .toast.info .dot {
-      background: var(--gold);
-    }
+    .toast.ok .dot { background: var(--green); }
+    .toast.err .dot { background: var(--red); }
+    .toast.info .dot { background: var(--gold); }
 
     @keyframes toastIn {
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
+      to { transform: translateX(0); opacity: 1; }
     }
 
     @keyframes toastOut {
-      to {
-        transform: translateX(24px);
-        opacity: 0;
-      }
+      to { transform: translateX(24px); opacity: 0; }
     }
 
-    /* ---- Statistik & grafik ringkas ---- */
     .chart-panel {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -436,7 +456,6 @@
       display: block;
     }
 
-    /* ---- Catatan & lampiran ---- */
     .catatan-cell {
       max-width: 200px;
       font-size: 12px;
@@ -476,7 +495,6 @@
       background: rgba(226, 168, 61, 0.12);
     }
 
-    /* ---- Pengenalan Wajah (face recognition) ---- */
     .wajah-cell {
       display: flex;
       align-items: center;
@@ -519,16 +537,7 @@
       opacity: 0.5;
       cursor: wait;
     }
-    .btn-hapus-wajah {
-      font-size: 11px;
-      color: var(--red);
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      text-decoration: underline;
-    }
 
-    /* ---- Modal konfirmasi kustom (pengganti confirm() bawaan browser) ---- */
     .confirm-overlay {
       position: fixed;
       inset: 0;
@@ -539,14 +548,9 @@
       background: rgba(5, 12, 8, 0.72);
       backdrop-filter: blur(2px);
       padding: 20px;
-      animation: confirmFadeIn 0.15s ease-out;
     }
     .confirm-overlay.show {
       display: flex;
-    }
-    @keyframes confirmFadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
     }
     .confirm-box {
       width: 100%;
@@ -556,11 +560,6 @@
       border-radius: 14px;
       padding: 22px;
       box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-      animation: confirmPopIn 0.16s ease-out;
-    }
-    @keyframes confirmPopIn {
-      from { opacity: 0; transform: translateY(6px) scale(0.98); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
     }
     .confirm-icon {
       width: 42px;
@@ -597,26 +596,36 @@
       justify-content: flex-end;
       gap: 10px;
     }
-    .confirm-actions button {
-      padding: 9px 18px;
-    }
     button.btn-danger {
       background: var(--red);
       color: #fff;
+    }
+
+    button.btn-table-delete {
+      background: rgba(226, 85, 77, 0.18);
+      color: #ff6b6b;
+      border: 1px solid rgba(226, 85, 77, 0.5);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.btn-table-delete:hover {
+      background: var(--red);
+      color: #ffffff;
+      border-color: var(--red);
     }
   </style>
 </head>
 
 <body>
-  <!-- Library face-api.js: deteksi & pengenalan wajah, jalan di browser -->
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
-  <!-- Preview foto membesar saat cursor diarahkan ke foto selfie -->
   <div id="photoHoverPreview" class="photo-hover-preview">
     <img id="photoHoverImg" src="" alt="preview foto" />
   </div>
 
-  <!-- Modal konfirmasi kustom (pengganti confirm() bawaan browser) -->
   <div id="confirmOverlay" class="confirm-overlay">
     <div class="confirm-box" id="confirmBox">
       <div class="confirm-icon" id="confirmIcon">!</div>
@@ -625,6 +634,41 @@
       <div class="confirm-actions">
         <button type="button" class="ghost" id="confirmCancelBtn">Batal</button>
         <button type="button" class="btn-danger" id="confirmOkBtn">Oke</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal edit data absen -->
+  <div id="editAbsenOverlay" class="confirm-overlay">
+    <div class="confirm-box" style="max-width:440px">
+      <div class="confirm-title" style="margin-bottom:16px">Update Data Absen</div>
+
+      <div class="edit-field">
+        <label for="editNama">Nama Peserta</label>
+        <select id="editNama"></select>
+      </div>
+      <div class="edit-field">
+        <label for="editStatus">Status Kehadiran</label>
+        <select id="editStatus">
+          <option value="Hadir">Hadir</option>
+          <option value="Izin">Izin</option>
+          <option value="Sakit">Sakit</option>
+        </select>
+      </div>
+      <div class="edit-field">
+        <label for="editKegiatan">Kegiatan</label>
+        <input type="text" id="editKegiatan" />
+      </div>
+      <div class="edit-field">
+        <label for="editCatatan">Catatan</label>
+        <textarea id="editCatatan"></textarea>
+      </div>
+
+      <div class="status" id="editAbsenStatus" style="margin-bottom:10px"></div>
+
+      <div class="confirm-actions">
+        <button type="button" class="ghost" id="editAbsenCancelBtn">Batal</button>
+        <button type="button" id="editAbsenSaveBtn" style="background: var(--gold); color:#1a1a1a; font-weight:600;">Simpan</button>
       </div>
     </div>
   </div>
@@ -642,7 +686,6 @@
   </header>
 
   <main>
-
     <div id="lockedView" class="panel locked">
       <div class="mark-lg">Akses Terbatas</div>
       <p style="color:var(--muted); margin-bottom:18px;">Masukkan kunci admin untuk membuka registri.</p>
@@ -688,6 +731,7 @@
           <button class="ghost" onclick="exportExcel()">📊 Export Excel</button>
         </div>
 
+        <div class="table-scroll">
         <table id="table">
           <thead>
             <tr>
@@ -698,11 +742,12 @@
               <th>Catatan</th>
               <th>Lampiran</th>
               <th>Lokasi</th>
-              <th style="width:70px">Aksi</th>
+              <th style="width:120px">Aksi</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
         </table>
+        </div>
         <div class="empty" id="emptyMsg" style="display:none">Tidak ada data yang cocok.</div>
 
         <div class="pagination">
@@ -739,6 +784,7 @@
         </div>
         <div class="status" id="pesertaFormStatus" style="padding:0 18px 12px"></div>
 
+        <div class="table-scroll">
         <table>
           <thead>
             <tr>
@@ -756,14 +802,13 @@
           </thead>
           <tbody id="pesertaBody"></tbody>
         </table>
+        </div>
         <div class="empty" id="pesertaEmpty" style="display:none">Belum ada peserta terdaftar.</div>
         <div class="status" id="wajahStatus" style="padding:0 18px 12px"></div>
       </div>
     </div>
-
   </main>
 
-  <!-- Library baca file Excel di browser (dipakai fitur upload) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
@@ -778,7 +823,6 @@
       try {
         const res = await fetch('/api/peserta/admin?key=' + encodeURIComponent(adminKey));
         const responseJson = await res.json();
-
         const data = Array.isArray(responseJson) ? responseJson : (responseJson.data || responseJson.peserta || []);
 
         tbody.innerHTML = '';
@@ -790,19 +834,17 @@
         for (const p of data) {
           const tr = document.createElement('tr');
           const isPensiun = p.status_pensiun === 1 || p.status_pensiun === true || p.status === 'pensiun';
-          
-          const statusPensiunBadge = isPensiun 
-            ? `<span class="badge-status" style="color:var(--red); border-color:rgba(226,85,77,0.4); background:rgba(226,85,77,0.12);">Pensiun</span>`
-            : `<span class="badge-status" style="color:var(--green); border-color:rgba(76,175,125,0.4); background:rgba(76,175,125,0.12);">Aktif</span>`;
 
-          const tombolStatusPensiun = isPensiun
-            ? `<button class="ghost" style="font-size:11px; padding:2px 8px; color:var(--green); border-color:var(--green);" onclick="ubahStatusPensiun('${p.id}', 0)">Jadikan Aktif</button>`
-            : `<button class="ghost" style="font-size:11px; padding:2px 8px; color:var(--red); border-color:var(--red);" onclick="ubahStatusPensiun('${p.id}', 1)">Pensiunkan</button>`;
+          const statusBtnText = isPensiun ? 'Status: Pensiun (Ubah ke Aktif)' : 'Status: Aktif (Ubah ke Pensiun)';
+          const statusBtnStyle = isPensiun 
+            ? 'background: rgba(226, 85, 77, 0.15); color: var(--red); border: 1px solid rgba(226, 85, 77, 0.4); font-size: 11.5px; padding: 4px 10px; border-radius: 6px; font-weight: 600;'
+            : 'background: rgba(76, 175, 125, 0.15); color: var(--green); border: 1px solid rgba(76, 175, 125, 0.4); font-size: 11.5px; padding: 4px 10px; border-radius: 6px; font-weight: 600;';
+          
+          const tombolStatusPensiun = `<button style="${statusBtnStyle}" onclick="ubahStatusPensiun('${p.id}', ${isPensiun ? 0 : 1})">${statusBtnText}</button>`;
 
           const wajahCell = p.punya_wajah
             ? `<img class="wajah-thumb" src="${p.foto_wajah || ''}" alt="wajah ${p.nama_lengkap}" />
-               <span class="badge-status badge-wajah-ok">✓ Terdaftar</span>
-               <button class="btn-hapus-wajah" onclick="hapusWajah('${p.id}')">Hapus</button>`
+               <span class="badge-status badge-wajah-ok">✓ Terdaftar</span>`
             : `<span class="badge-status badge-wajah-kosong">Belum ada</span>`;
 
           tr.innerHTML = `
@@ -812,12 +854,7 @@
             <td>${p.bagian || '-'}</td>
             <td>${p.jabatan || '-'}</td>
             <td>${p.tempat || '-'}</td>
-            <td>
-              <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                ${statusPensiunBadge}
-                ${tombolStatusPensiun}
-              </div>
-            </td>
+            <td>${tombolStatusPensiun}</td>
             <td class="waktu">${formatTanggalJam(p.dibuat_pada)}</td>
             <td>
               <div class="wajah-cell">
@@ -826,7 +863,7 @@
                 <input type="file" accept="image/*" class="wajah-file-input" id="wajahFile_${p.id}" onchange="daftarkanWajah('${p.id}', this.files[0], this)" />
               </div>
             </td>
-            <td><button class="ghost" onclick="hapusPeserta('${p.id}')">Hapus</button></td>
+            <td><button class="btn-table-delete" onclick="hapusPeserta('${p.id}')">Hapus</button></td>
           `;
           tbody.appendChild(tr);
         }
@@ -835,34 +872,37 @@
       }
     }
 
-    async function ubahStatusPensiun(id, statusPensiun) {
-      const statusText = statusPensiun === 1 ? 'mempensiunkan' : 'mengaktifkan kembali';
-      const ok = await showConfirm({
-        title: 'Ubah status pegawai?',
-        message: `Anda yakin ingin ${statusText} peserta ini?`,
-        confirmText: 'Ya, Ubah',
-      });
-      if (!ok) return;
+   async function ubahStatusPensiun(id, statusPensiun) {
+  const statusValue = statusPensiun === 1 ? 'Pensiun' : 'Aktif';
+  const statusText = statusPensiun === 1 ? 'mempensiunkan' : 'mengaktifkan kembali';
+  
+  const ok = await showConfirm({
+    title: 'Ubah status pegawai?',
+    message: `Anda yakin ingin ${statusText} peserta ini?`,
+    confirmText: 'Ya, Ubah',
+    danger: statusPensiun === 1
+  });
+  if (!ok) return;
 
-      try {
-        const res = await fetch(`/api/peserta/${id}/status?key=` + encodeURIComponent(adminKey), {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status_pensiun: statusPensiun })
-        });
+  try {
+    const res = await fetch(`/api/peserta/${id}/status?key=` + encodeURIComponent(adminKey), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status_pensiun: statusValue })
+    });
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || 'Gagal mengubah status di server');
-        }
-
-        showToast('Status peserta berhasil diperbarui.', 'ok');
-        loadPeserta();
-        loadStats();
-      } catch (e) {
-        showToast('Gagal memperbarui status: ' + e.message, 'err');
-      }
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Gagal mengubah status di server');
     }
+
+    showToast('Status peserta berhasil diperbarui.', 'ok');
+    loadPeserta();
+    loadStats();
+  } catch (e) {
+    showToast('Gagal memperbarui status: ' + e.message, 'err');
+  }
+}
 
     function pesertaFormStatus(msg, ok) {
       const el = document.getElementById('pesertaFormStatus');
@@ -908,9 +948,6 @@
       }
     }
 
-    // ==========================================================
-    // Modal konfirmasi kustom — pengganti confirm() bawaan browser
-    // ==========================================================
     const confirmOverlay = document.getElementById('confirmOverlay');
     const confirmBox = document.getElementById('confirmBox');
     const confirmIcon = document.getElementById('confirmIcon');
@@ -988,12 +1025,10 @@
         const res = await fetch('/api/absen/' + id + '?key=' + encodeURIComponent(adminKey), { 
           method: 'DELETE' 
         });
-        
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.error || 'Gagal menghapus dari server');
         }
-        
         showToast('Data absen berhasil dihapus.', 'ok');
         loadData();
         loadStats();
@@ -1004,8 +1039,94 @@
     }
 
     // ==========================================================
-    // Pengenalan Wajah — daftarkan foto referensi tiap peserta
+    // Update / edit data absen (nama, status kehadiran, kegiatan, catatan)
     // ==========================================================
+    const editAbsenOverlay = document.getElementById('editAbsenOverlay');
+    const editNamaSelect = document.getElementById('editNama');
+    const editStatusSelect = document.getElementById('editStatus');
+    const editKegiatanInput = document.getElementById('editKegiatan');
+    const editCatatanInput = document.getElementById('editCatatan');
+    const editAbsenStatusEl = document.getElementById('editAbsenStatus');
+    const editAbsenCancelBtn = document.getElementById('editAbsenCancelBtn');
+    const editAbsenSaveBtn = document.getElementById('editAbsenSaveBtn');
+    let editAbsenCurrentId = null;
+
+    // Menyimpan data baris absen yang sedang tampil, dikunci per ID,
+    // supaya tombol Update tidak perlu menyisipkan seluruh data (termasuk foto) ke HTML
+    let absenRowsById = {};
+
+    async function bukaEditAbsen(id) {
+      const row = absenRowsById[id];
+      if (!row) {
+        showToast('Data tidak ditemukan, coba muat ulang halaman.', 'err');
+        return;
+      }
+      editAbsenCurrentId = row._id || row.id || row.id_absen || '';
+      editAbsenStatusEl.textContent = '';
+
+      // Isi dropdown nama dari daftar peserta aktif
+      try {
+        const res = await fetch('/api/peserta/admin?key=' + encodeURIComponent(adminKey));
+        const responseJson = await res.json();
+        const data = Array.isArray(responseJson) ? responseJson : (responseJson.data || responseJson.peserta || []);
+        editNamaSelect.innerHTML = data.map(p =>
+          `<option value="${escapeHtml(p.nama_lengkap)}">${escapeHtml(p.nama_lengkap)}</option>`
+        ).join('');
+      } catch (e) {
+        editNamaSelect.innerHTML = `<option value="${escapeHtml(row.nama)}">${escapeHtml(row.nama)}</option>`;
+      }
+
+      editNamaSelect.value = row.nama || '';
+      editStatusSelect.value = row.status_kehadiran || row.status || 'Hadir';
+      editKegiatanInput.value = row.kegiatan === 'Lainnya' ? (row.kegiatan_catatan || '') : (row.kegiatan || '');
+      editCatatanInput.value = row.catatan || '';
+
+      editAbsenOverlay.classList.add('show');
+    }
+
+    function tutupEditAbsen() {
+      editAbsenOverlay.classList.remove('show');
+      editAbsenCurrentId = null;
+    }
+
+    editAbsenCancelBtn.addEventListener('click', tutupEditAbsen);
+    editAbsenOverlay.addEventListener('click', (e) => {
+      if (e.target === editAbsenOverlay) tutupEditAbsen();
+    });
+
+    editAbsenSaveBtn.addEventListener('click', async () => {
+      if (!editAbsenCurrentId) return;
+      editAbsenSaveBtn.disabled = true;
+      editAbsenSaveBtn.textContent = 'Menyimpan...';
+      editAbsenStatusEl.textContent = '';
+      try {
+        const res = await fetch(`/api/absen/${editAbsenCurrentId}?key=` + encodeURIComponent(adminKey), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nama: editNamaSelect.value,
+            status_kehadiran: editStatusSelect.value,
+            kegiatan: editKegiatanInput.value,
+            catatan: editCatatanInput.value,
+          }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Gagal menyimpan perubahan di server');
+        }
+        showToast('Data absen berhasil diperbarui.', 'ok');
+        tutupEditAbsen();
+        loadData();
+        loadStats();
+      } catch (e) {
+        editAbsenStatusEl.textContent = e.message;
+        editAbsenStatusEl.className = 'status err';
+      } finally {
+        editAbsenSaveBtn.disabled = false;
+        editAbsenSaveBtn.textContent = 'Simpan';
+      }
+    });
+
     const wajahStatusEl = document.getElementById('wajahStatus');
     function setWajahStatus(msg, ok) {
       wajahStatusEl.textContent = msg;
@@ -1081,7 +1202,7 @@
           .withFaceDescriptor();
 
         if (!hasil) {
-          setWajahStatus('Wajah tidak terdeteksi pada foto tersebut. Gunakan foto close-up, pencahayaan cukup, wajah menghadap kamera.', false);
+          setWajahStatus('Wajah tidak terdeteksi pada foto tersebut. Gunakan foto close-up yang jelas.', false);
           return;
         }
 
@@ -1108,22 +1229,6 @@
       } finally {
         inputEl.value = '';
         if (btn) { btn.disabled = false; }
-      }
-    }
-
-    async function hapusWajah(id) {
-      const ok = await showConfirm({
-        title: 'Hapus foto wajah?',
-        message: 'Foto wajah referensi peserta ini akan dihapus. Deteksi otomatis tidak akan bekerja untuk peserta ini sampai didaftarkan ulang.',
-        confirmText: 'Hapus',
-      });
-      if (!ok) return;
-      try {
-        await fetch(`/api/peserta/${id}/wajah?key=${encodeURIComponent(adminKey)}`, { method: 'DELETE' });
-        showToast('Foto wajah dihapus.', 'ok');
-        loadPeserta();
-      } catch (e) {
-        showToast('Gagal menghapus wajah: ' + e.message, 'err');
       }
     }
 
@@ -1162,7 +1267,7 @@
         })).filter(p => p.nama_lengkap);
 
         if (peserta.length === 0) {
-          pesertaFormStatus('Tidak ada kolom "Nama" yang terbaca di file Excel. Pastikan ada kolom bernama "Nama".', false);
+          pesertaFormStatus('Tidak ada kolom "Nama" yang terbaca di file Excel.', false);
           return;
         }
 
@@ -1180,7 +1285,7 @@
           return;
         }
 
-        pesertaFormStatus(`Berhasil: ${data.ditambah} peserta ditambahkan, ${data.dilewati} dilewati (nama kosong/duplikat).`, true);
+        pesertaFormStatus(`Berhasil: ${data.ditambah} peserta ditambahkan, ${data.dilewati} dilewati.`, true);
         loadPeserta();
         loadStats();
       } catch (err) {
@@ -1267,6 +1372,7 @@
         const { data, total, totalPages: tp } = await res.json();
         totalPages = tp;
         tbody.innerHTML = '';
+        absenRowsById = {};
 
         if (data.length === 0) {
           table.style.display = 'none';
@@ -1288,6 +1394,7 @@
               : '<span style="color:var(--muted)">—</span>';
             
             const recordId = row._id || row.id || row.id_absen || '';
+            absenRowsById[recordId] = row;
 
             tr.innerHTML = `
               <td>
@@ -1308,7 +1415,12 @@
               <td class="catatan-cell">${catatanText}</td>
               <td>${lampiranCell}</td>
               <td><a class="maplink" target="_blank" href="https://www.google.com/maps?q=${row.lat},${row.lng}">Lihat di peta ↗</a></td>
-              <td><button class="ghost" style="color:var(--red); border-color:rgba(226,85,77,0.4);" onclick="hapusAbsen('${recordId}')">Hapus</button></td>
+              <td>
+                <div class="aksi-cell">
+                  <button class="btn-table-action" onclick="bukaEditAbsen('${recordId}')">Update</button>
+                  <button class="btn-table-delete" onclick="hapusAbsen('${recordId}')">Hapus</button>
+                </div>
+              </td>
             `;
             tbody.appendChild(tr);
           }
@@ -1335,9 +1447,6 @@
     document.getElementById('search').addEventListener('input', () => { page = 1; loadData(); });
     document.getElementById('tanggal').addEventListener('change', () => { page = 1; loadData(); });
 
-    // ==========================================================
-    // Toast Notification Beranimasi
-    // ==========================================================
     const toastContainer = document.getElementById('toastContainer');
     function showToast(msg, type, duration) {
       type = type || 'info';
@@ -1363,9 +1472,6 @@
       return div.innerHTML;
     }
 
-    // ==========================================================
-    // Ekspor ke Excel (.xlsx)
-    // ==========================================================
     async function exportExcel() {
       const search = document.getElementById('search').value.trim();
       const tanggal = document.getElementById('tanggal').value;
@@ -1407,9 +1513,6 @@
       }
     }
 
-    // ==========================================================
-    // Statistik & grafik kehadiran ringkas
-    // ==========================================================
     async function loadWeeklyChart() {
       const canvas = document.getElementById('weeklyChart');
       const ctx = canvas.getContext('2d');
@@ -1470,9 +1573,6 @@
       });
     }
 
-    // ==========================================================
-    // Preview foto membesar saat hover
-    // ==========================================================
     (function () {
       const preview = document.getElementById('photoHoverPreview');
       const previewImg = document.getElementById('photoHoverImg');
@@ -1519,7 +1619,6 @@
       });
     })();
   </script>
-
 </body>
-
 </html>
+```[cite: 5]
