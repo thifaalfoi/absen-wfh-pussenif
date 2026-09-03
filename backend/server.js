@@ -418,12 +418,66 @@ app.post("/api/absen", wrap(async (req, res) => {
   res.json({ ok: true, id, waktu, terlambat, status_kehadiran: statusKehadiran });
 }));
 
+// Admin: tambah absen manual (peserta lupa/gagal absen tapi tetap masuk kerja).
+// Tidak butuh foto/lokasi/pembatasan jam, karena diinput langsung oleh admin.
+app.post("/api/absen/manual", requireAdminKey, wrap(async (req, res) => {
+  const { nama, waktu, status_kehadiran, kegiatan, catatan } = req.body;
+
+  if (!nama || !nama.toString().trim()) {
+    return res.status(400).json({ error: "Nama wajib diisi." });
+  }
+  const statusKehadiran = STATUS_KEHADIRAN_OPTIONS.includes(status_kehadiran) ? status_kehadiran : "Hadir";
+
+  const [terdaftarRows] = await pool.query(
+    `SELECT 1 FROM peserta WHERE nama_lengkap = ? AND (status_pensiun = 'Aktif' OR status_pensiun IS NULL)`,
+    [nama.toString().trim()]
+  );
+  if (terdaftarRows.length === 0) {
+    return res.status(403).json({ error: "Nama tidak terdaftar sebagai peserta aktif." });
+  }
+
+  const waktuFinal = waktu ? new Date(waktu).toISOString() : new Date().toISOString();
+  const tanggalFinal = waktuFinal.slice(0, 10);
+
+  const [sudahAbsenRows] = await pool.query(
+    `SELECT 1 FROM absen WHERE nama = ? AND waktu LIKE ?`,
+    [nama.toString().trim(), `${tanggalFinal}%`]
+  );
+  if (sudahAbsenRows.length > 0) {
+    return res.status(409).json({ error: "Peserta ini sudah punya data absen di tanggal tersebut." });
+  }
+
+  const id = crypto.randomUUID();
+  await pool.query(
+    `INSERT INTO absen (id, nama, waktu, lat, lng, akurasi, foto_path, status, status_kehadiran, kegiatan, kegiatan_catatan, catatan, terlambat)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      nama.toString().trim(),
+      waktuFinal,
+      null,
+      null,
+      null,
+      "", // tidak ada foto untuk entri manual
+      "WFH",
+      statusKehadiran,
+      (kegiatan || "").toString().trim() || "Input manual oleh admin",
+      null,
+      (catatan || "").toString().trim() || null,
+      "Tidak",
+    ]
+  );
+
+  res.json({ ok: true, id, waktu: waktuFinal });
+}));
+
 app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
   const page = Math.max(parseInt(req.query.page) || 1, 1);
-  const limit = Math.min(Math.max(parseInt(req.query.limit) || 25, 1), 100);
+  const limit = Math.min(Math.max(parseInt(req.query.limit) || 25, 1), 3000);
   const offset = (page - 1) * limit;
   const search = (req.query.search || "").trim();
   const tanggal = (req.query.tanggal || "").trim();
+  const statusKehadiranFilter = (req.query.status_kehadiran || "").trim();
 
   let where = "WHERE 1=1";
   const params = [];
@@ -434,6 +488,10 @@ app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
   if (tanggal) {
     where += " AND waktu LIKE ?";
     params.push(`${tanggal}%`);
+  }
+  if (statusKehadiranFilter && STATUS_KEHADIRAN_OPTIONS.includes(statusKehadiranFilter)) {
+    where += " AND status_kehadiran = ?";
+    params.push(statusKehadiranFilter);
   }
 
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM absen ${where}`, params);
@@ -468,7 +526,7 @@ app.delete("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
 
 // Admin: update sebagian data absen (nama, status kehadiran, kegiatan, catatan)
 app.patch("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
-  const { nama, status_kehadiran, kegiatan, catatan } = req.body;
+  const { nama, status_kehadiran, kegiatan, catatan, foto } = req.body;
   const fields = [];
   const params = [];
 
@@ -493,6 +551,13 @@ app.patch("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
   if (catatan !== undefined) {
     fields.push("catatan = ?");
     params.push(catatan.toString().trim() || null);
+  }
+  if (foto !== undefined) {
+    if (!/^data:image\/(png|jpeg|jpg);base64,/.test(foto)) {
+      return res.status(400).json({ error: "Format foto tidak valid." });
+    }
+    fields.push("foto_path = ?");
+    params.push(foto);
   }
 
   if (fields.length === 0) {
@@ -541,6 +606,7 @@ app.get("/api/absen/stats", requireAdminKey, wrap(async (req, res) => {
 app.get("/api/absen/export", requireAdminKey, wrap(async (req, res) => {
   const search = (req.query.search || "").trim();
   const tanggal = (req.query.tanggal || "").trim();
+  const statusKehadiranFilter = (req.query.status_kehadiran || "").trim();
 
   let where = "WHERE 1=1";
   const params = [];
@@ -551,6 +617,10 @@ app.get("/api/absen/export", requireAdminKey, wrap(async (req, res) => {
   if (tanggal) {
     where += " AND waktu LIKE ?";
     params.push(`${tanggal}%`);
+  }
+  if (statusKehadiranFilter && STATUS_KEHADIRAN_OPTIONS.includes(statusKehadiranFilter)) {
+    where += " AND status_kehadiran = ?";
+    params.push(statusKehadiranFilter);
   }
 
   const [rows] = await pool.query(

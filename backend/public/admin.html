@@ -261,6 +261,35 @@
     }
     .pensiun-label.is-aktif { color: var(--green); }
     .pensiun-label.is-pensiun { color: var(--red); }
+
+    .belum-absen-chip {
+      background: rgba(226, 85, 77, 0.12);
+      border: 1px solid rgba(226, 85, 77, 0.35);
+      color: var(--red);
+      font-size: 12.5px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 999px;
+    }
+    .chart-legend {
+      display: flex;
+      gap: 16px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .chart-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chart-legend .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      display: inline-block;
+    }
     .btn-table-action:hover {
       background: var(--gold);
       color: #1a1a1a;
@@ -697,6 +726,17 @@
       <div class="confirm-title" style="margin-bottom:16px">Update Data Absen</div>
 
       <div class="edit-field">
+        <label>Foto Selfie</label>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <img id="editFotoPreview" src="" alt="preview foto" style="width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--line);" />
+          <div>
+            <button type="button" class="btn-table-action" onclick="document.getElementById('editFotoFile').click()">Ganti Foto</button>
+            <input type="file" id="editFotoFile" accept="image/*" style="display:none" />
+            <div style="font-size:11px; color:var(--muted); margin-top:4px;">Kosongkan kalau tidak mau ganti foto.</div>
+          </div>
+        </div>
+      </div>
+      <div class="edit-field">
         <label for="editNama">Nama Peserta</label>
         <select id="editNama"></select>
       </div>
@@ -726,6 +766,46 @@
     </div>
   </div>
 
+  <!-- Modal tambah data absen manual oleh admin -->
+  <div id="tambahAbsenOverlay" class="confirm-overlay">
+    <div class="confirm-box" style="max-width:440px">
+      <div class="confirm-title" style="margin-bottom:16px">Tambah Absen Manual</div>
+      <div style="font-size:12px; color:var(--muted); margin-bottom:14px;">Dipakai kalau ada peserta yang lupa/gagal absen tapi tetap masuk kerja. Tidak butuh foto/lokasi.</div>
+
+      <div class="edit-field">
+        <label for="tambahNama">Nama Peserta</label>
+        <select id="tambahNama"></select>
+      </div>
+      <div class="edit-field">
+        <label for="tambahTanggalJam">Tanggal &amp; Jam</label>
+        <input type="datetime-local" id="tambahTanggalJam" />
+      </div>
+      <div class="edit-field">
+        <label for="tambahStatus">Status Kehadiran</label>
+        <select id="tambahStatus">
+          <option value="Hadir">Hadir</option>
+          <option value="Izin">Izin</option>
+          <option value="Sakit">Sakit</option>
+        </select>
+      </div>
+      <div class="edit-field">
+        <label for="tambahKegiatan">Kegiatan</label>
+        <input type="text" id="tambahKegiatan" placeholder="mis. Mengerjakan tugas dari atasan" />
+      </div>
+      <div class="edit-field">
+        <label for="tambahCatatan">Catatan</label>
+        <textarea id="tambahCatatan"></textarea>
+      </div>
+
+      <div class="status" id="tambahAbsenStatus" style="margin-bottom:10px"></div>
+
+      <div class="confirm-actions">
+        <button type="button" class="ghost" id="tambahAbsenCancelBtn">Batal</button>
+        <button type="button" id="tambahAbsenSaveBtn" style="background: var(--gold); color:#1a1a1a; font-weight:600;">Simpan</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toastContainer"></div>
 
   <header>
@@ -735,6 +815,7 @@
     <div style="text-align: right;">
       <h1>Registri Absen</h1>
       <p>Rekap kehadiran WFH — foto, waktu, dan titik lokasi tiap check-in.</p>
+      <button type="button" class="ghost" id="logoutBtn" style="display:none; margin-top:10px; font-size:12px;" onclick="logoutAdmin()">🔒 Ganti Kunci Admin</button>
     </div>
   </header>
 
@@ -767,19 +848,44 @@
         </div>
       </div>
 
+      <div class="panel" id="belumAbsenPanel" style="padding:18px 22px; margin-bottom:22px;">
+        <div class="chart-title" style="margin-bottom:10px;">Belum Absen Hari Ini</div>
+        <div id="belumAbsenList" style="display:flex; flex-wrap:wrap; gap:8px;">
+          <span style="color:var(--muted); font-size:13px;">Memuat...</span>
+        </div>
+      </div>
+
       <div class="chart-panel">
         <div class="chart-title">Kehadiran 6 Hari Terakhir (WFH setiap hari)</div>
         <canvas id="weeklyChart" width="900" height="120"></canvas>
+        <div class="chart-legend">
+          <span><span class="dot" style="background:#4CAF7D"></span>Hadir</span>
+          <span><span class="dot" style="background:#D4A73C"></span>Izin</span>
+          <span><span class="dot" style="background:#e2554d"></span>Sakit</span>
+        </div>
         <div style="margin-top:8px; font-size:11.5px; color:var(--muted);">Menampilkan 6 hari terakhir dengan aktivitas absen.</div>
       </div>
 
       <div class="panel">
-        <div class="toolbar">
+        <div class="toolbar" style="flex-wrap:wrap">
           <input type="text" id="search" placeholder="Cari nama..." />
           <input type="date" id="tanggal" />
+          <select id="statusFilter" onchange="page=1; loadData();">
+            <option value="">Semua Status</option>
+            <option value="Hadir">Hadir</option>
+            <option value="Izin">Izin</option>
+            <option value="Sakit">Sakit</option>
+          </select>
+          <select id="limitSelect" onchange="limit = parseInt(this.value); page=1; loadData();">
+            <option value="10">10 / halaman</option>
+            <option value="25" selected>25 / halaman</option>
+            <option value="50">50 / halaman</option>
+            <option value="100">100 / halaman</option>
+          </select>
           <button class="ghost" onclick="resetFilter()">Reset</button>
           <div class="spacer"></div>
           <span class="status" id="status"></span>
+          <button type="button" style="background: var(--gold); color:#1a1a1a; font-weight:600;" onclick="bukaTambahAbsen()">+ Tambah Absen</button>
           <button class="ghost" onclick="exportCsv()">Export CSV</button>
           <button class="ghost" onclick="exportExcel()">📊 Export Excel</button>
         </div>
@@ -1091,6 +1197,7 @@
         loadData();
         loadStats();
         loadWeeklyChart();
+        loadBelumAbsen();
       } catch (e) {
         showToast('Gagal menghapus absen: ' + e.message, 'err');
       }
@@ -1107,11 +1214,30 @@
     const editAbsenStatusEl = document.getElementById('editAbsenStatus');
     const editAbsenCancelBtn = document.getElementById('editAbsenCancelBtn');
     const editAbsenSaveBtn = document.getElementById('editAbsenSaveBtn');
+    const editFotoPreview = document.getElementById('editFotoPreview');
+    const editFotoFile = document.getElementById('editFotoFile');
     let editAbsenCurrentId = null;
+    let editFotoDataUrl = null; // null = tidak diganti, terisi = foto baru (data URL)
 
     // Menyimpan data baris absen yang sedang tampil, dikunci per ID,
     // supaya tombol Update tidak perlu menyisipkan seluruh data (termasuk foto) ke HTML
     let absenRowsById = {};
+
+    editFotoFile.addEventListener('change', () => {
+      const file = editFotoFile.files[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('Ukuran foto maksimal 5MB.', 'err');
+        editFotoFile.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        editFotoDataUrl = reader.result;
+        editFotoPreview.src = editFotoDataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
 
     async function bukaEditAbsen(id) {
       const row = absenRowsById[id];
@@ -1121,6 +1247,9 @@
       }
       editAbsenCurrentId = row._id || row.id || row.id_absen || '';
       editAbsenStatusEl.textContent = '';
+      editFotoDataUrl = null;
+      editFotoFile.value = '';
+      editFotoPreview.src = row.foto_url || '';
 
       // Isi dropdown nama dari daftar peserta aktif
       try {
@@ -1145,6 +1274,7 @@
     function tutupEditAbsen() {
       editAbsenOverlay.classList.remove('show');
       editAbsenCurrentId = null;
+      editFotoDataUrl = null;
     }
 
     editAbsenCancelBtn.addEventListener('click', tutupEditAbsen);
@@ -1158,15 +1288,19 @@
       editAbsenSaveBtn.textContent = 'Menyimpan...';
       editAbsenStatusEl.textContent = '';
       try {
+        const payload = {
+          nama: editNamaSelect.value,
+          status_kehadiran: editStatusSelect.value,
+          kegiatan: editKegiatanInput.value,
+          catatan: editCatatanInput.value,
+        };
+        if (editFotoDataUrl) {
+          payload.foto = editFotoDataUrl;
+        }
         const res = await fetch(`/api/absen/${editAbsenCurrentId}?key=` + encodeURIComponent(adminKey), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            nama: editNamaSelect.value,
-            status_kehadiran: editStatusSelect.value,
-            kegiatan: editKegiatanInput.value,
-            catatan: editCatatanInput.value,
-          }),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
@@ -1176,12 +1310,106 @@
         tutupEditAbsen();
         loadData();
         loadStats();
+        loadBelumAbsen();
       } catch (e) {
         editAbsenStatusEl.textContent = e.message;
         editAbsenStatusEl.className = 'status err';
       } finally {
         editAbsenSaveBtn.disabled = false;
         editAbsenSaveBtn.textContent = 'Simpan';
+      }
+    });
+
+    // ==========================================================
+    // Tambah absen manual oleh admin
+    // ==========================================================
+    const tambahAbsenOverlay = document.getElementById('tambahAbsenOverlay');
+    const tambahNamaSelect = document.getElementById('tambahNama');
+    const tambahTanggalJamInput = document.getElementById('tambahTanggalJam');
+    const tambahStatusSelect = document.getElementById('tambahStatus');
+    const tambahKegiatanInput = document.getElementById('tambahKegiatan');
+    const tambahCatatanInput = document.getElementById('tambahCatatan');
+    const tambahAbsenStatusEl = document.getElementById('tambahAbsenStatus');
+    const tambahAbsenCancelBtn = document.getElementById('tambahAbsenCancelBtn');
+    const tambahAbsenSaveBtn = document.getElementById('tambahAbsenSaveBtn');
+
+    function formatDatetimeLocal(d) {
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    async function bukaTambahAbsen() {
+      tambahAbsenStatusEl.textContent = '';
+      tambahKegiatanInput.value = '';
+      tambahCatatanInput.value = '';
+      tambahStatusSelect.value = 'Hadir';
+      tambahTanggalJamInput.value = formatDatetimeLocal(new Date());
+
+      try {
+        const res = await fetch('/api/peserta/admin?key=' + encodeURIComponent(adminKey));
+        const responseJson = await res.json();
+        const data = Array.isArray(responseJson) ? responseJson : (responseJson.data || responseJson.peserta || []);
+        const aktif = data.filter(p => (p.status_pensiun || 'Aktif') === 'Aktif');
+        tambahNamaSelect.innerHTML = aktif.map(p =>
+          `<option value="${escapeHtml(p.nama_lengkap)}">${escapeHtml(p.nama_lengkap)}</option>`
+        ).join('');
+      } catch (e) {
+        tambahNamaSelect.innerHTML = '';
+      }
+
+      tambahAbsenOverlay.classList.add('show');
+    }
+
+    function tutupTambahAbsen() {
+      tambahAbsenOverlay.classList.remove('show');
+    }
+
+    tambahAbsenCancelBtn.addEventListener('click', tutupTambahAbsen);
+    tambahAbsenOverlay.addEventListener('click', (e) => {
+      if (e.target === tambahAbsenOverlay) tutupTambahAbsen();
+    });
+
+    tambahAbsenSaveBtn.addEventListener('click', async () => {
+      if (!tambahNamaSelect.value) {
+        tambahAbsenStatusEl.textContent = 'Tidak ada peserta aktif untuk dipilih.';
+        tambahAbsenStatusEl.className = 'status err';
+        return;
+      }
+      tambahAbsenSaveBtn.disabled = true;
+      tambahAbsenSaveBtn.textContent = 'Menyimpan...';
+      tambahAbsenStatusEl.textContent = '';
+      try {
+        const waktuIso = tambahTanggalJamInput.value
+          ? new Date(tambahTanggalJamInput.value).toISOString()
+          : new Date().toISOString();
+
+        const res = await fetch('/api/absen/manual?key=' + encodeURIComponent(adminKey), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nama: tambahNamaSelect.value,
+            waktu: waktuIso,
+            status_kehadiran: tambahStatusSelect.value,
+            kegiatan: tambahKegiatanInput.value,
+            catatan: tambahCatatanInput.value,
+          }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Gagal menyimpan ke server');
+        }
+        showToast('Absen manual berhasil ditambahkan.', 'ok');
+        tutupTambahAbsen();
+        loadData();
+        loadStats();
+        loadWeeklyChart();
+        loadBelumAbsen();
+      } catch (e) {
+        tambahAbsenStatusEl.textContent = e.message;
+        tambahAbsenStatusEl.className = 'status err';
+      } finally {
+        tambahAbsenSaveBtn.disabled = false;
+        tambahAbsenSaveBtn.textContent = 'Simpan';
       }
     });
 
@@ -1357,7 +1585,7 @@
   <script>
     let adminKey = "";
     let page = 1;
-    const limit = 25;
+    let limit = 25;
     let totalPages = 1;
 
     function unlock() {
@@ -1370,18 +1598,30 @@
       document.getElementById('lockStatus').textContent = '';
       document.getElementById('lockedView').style.display = 'none';
       document.getElementById('dashboardView').style.display = 'block';
+      document.getElementById('logoutBtn').style.display = 'inline-block';
       loadStats();
       loadData();
       loadPeserta();
       loadWeeklyChart();
+      loadBelumAbsen();
     }
     document.getElementById('adminKeyLocked').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') unlock();
     });
 
+    function logoutAdmin() {
+      adminKey = "";
+      document.getElementById('adminKeyLocked').value = '';
+      document.getElementById('lockStatus').textContent = '';
+      document.getElementById('dashboardView').style.display = 'none';
+      document.getElementById('lockedView').style.display = 'block';
+      document.getElementById('logoutBtn').style.display = 'none';
+    }
+
     function resetFilter() {
       document.getElementById('search').value = '';
       document.getElementById('tanggal').value = '';
+      document.getElementById('statusFilter').value = '';
       page = 1;
       loadData();
     }
@@ -1404,6 +1644,36 @@
       } catch (e) { }
     }
 
+    // ==========================================================
+    // Fitur: daftar peserta aktif yang BELUM absen hari ini
+    // ==========================================================
+    async function loadBelumAbsen() {
+      const el = document.getElementById('belumAbsenList');
+      el.innerHTML = '<span style="color:var(--muted); font-size:13px;">Memuat...</span>';
+      try {
+        const today = new Date();
+        const tanggalHariIni = today.toISOString().slice(0, 10);
+
+        const [pesertaRes, absenRes] = await Promise.all([
+          fetch('/api/peserta'),
+          fetch('/api/absen?' + new URLSearchParams({ key: adminKey, tanggal: tanggalHariIni, limit: 1000, page: 1 }).toString()),
+        ]);
+        const pesertaAktif = await pesertaRes.json();
+        const { data: absenHariIni } = await absenRes.json();
+
+        const namaSudahAbsen = new Set((absenHariIni || []).map(r => r.nama));
+        const belum = pesertaAktif.filter(p => !namaSudahAbsen.has(p.nama_lengkap));
+
+        if (belum.length === 0) {
+          el.innerHTML = '<span style="color:var(--green); font-size:13px;">✓ Semua peserta aktif sudah absen hari ini.</span>';
+          return;
+        }
+        el.innerHTML = belum.map(p => `<span class="belum-absen-chip">${escapeHtml(p.nama_lengkap)}</span>`).join('');
+      } catch (e) {
+        el.innerHTML = '<span style="color:var(--muted); font-size:13px;">Gagal memuat daftar.</span>';
+      }
+    }
+
     async function loadData() {
       const status = document.getElementById('status');
       const table = document.getElementById('table');
@@ -1411,12 +1681,14 @@
       const emptyMsg = document.getElementById('emptyMsg');
       const search = document.getElementById('search').value.trim();
       const tanggal = document.getElementById('tanggal').value;
+      const statusFilter = document.getElementById('statusFilter').value;
 
       status.textContent = 'Memuat...';
 
       const params = new URLSearchParams({ key: adminKey, page, limit });
       if (search) params.set('search', search);
       if (tanggal) params.set('tanggal', tanggal);
+      if (statusFilter) params.set('status_kehadiran', statusFilter);
 
       try {
         const res = await fetch('/api/absen?' + params.toString());
@@ -1496,9 +1768,11 @@
     function exportCsv() {
       const search = document.getElementById('search').value.trim();
       const tanggal = document.getElementById('tanggal').value;
+      const statusFilter = document.getElementById('statusFilter').value;
       const params = new URLSearchParams({ key: adminKey });
       if (search) params.set('search', search);
       if (tanggal) params.set('tanggal', tanggal);
+      if (statusFilter) params.set('status_kehadiran', statusFilter);
       window.open('/api/absen/export?' + params.toString(), '_blank');
     }
 
@@ -1533,9 +1807,11 @@
     async function exportExcel() {
       const search = document.getElementById('search').value.trim();
       const tanggal = document.getElementById('tanggal').value;
+      const statusFilter = document.getElementById('statusFilter').value;
       const params = new URLSearchParams({ key: adminKey, page: 1, limit: 10000 });
       if (search) params.set('search', search);
       if (tanggal) params.set('tanggal', tanggal);
+      if (statusFilter) params.set('status_kehadiran', statusFilter);
 
       showToast('Menyiapkan file Excel...', 'info', 2000);
       try {
@@ -1581,7 +1857,7 @@
         const d = new Date(today);
         d.setDate(d.getDate() - i);
         const label = `${d.getDate()}/${d.getMonth() + 1}`;
-        days.push({ key: d.toISOString().slice(0, 10), label, count: 0 });
+        days.push({ key: d.toISOString().slice(0, 10), label, hadir: 0, izin: 0, sakit: 0 });
       }
 
       try {
@@ -1592,7 +1868,11 @@
           for (const row of (data || [])) {
             const key = new Date(row.waktu).toISOString().slice(0, 10);
             const day = days.find(d => d.key === key);
-            if (day) day.count++;
+            if (!day) continue;
+            const s = row.status_kehadiran || row.status || 'Hadir';
+            if (s === 'Izin') day.izin++;
+            else if (s === 'Sakit') day.sakit++;
+            else day.hadir++;
           }
         }
       } catch (e) {}
@@ -1600,9 +1880,12 @@
       drawBarChart(ctx, canvas.width, canvas.height, days);
     }
 
+    const CHART_COLORS = { hadir: '#4CAF7D', izin: '#D4A73C', sakit: '#e2554d' };
+
     function drawBarChart(ctx, width, height, days) {
       ctx.clearRect(0, 0, width, height);
-      const max = Math.max(1, ...days.map(d => d.count));
+      const totals = days.map(d => d.hadir + d.izin + d.sakit);
+      const max = Math.max(1, ...totals);
       const padding = 24;
       const chartH = height - padding - 20;
       const barGap = 16;
@@ -1611,20 +1894,28 @@
       ctx.font = '11px Inter, sans-serif';
       days.forEach((d, i) => {
         const x = padding + i * (barW + barGap);
-        const h = (d.count / max) * chartH;
-        const y = height - 20 - h;
+        const total = d.hadir + d.izin + d.sakit;
+        let yCursor = height - 20;
 
-        const grad = ctx.createLinearGradient(0, y, 0, height - 20);
-        grad.addColorStop(0, '#D4A73C');
-        grad.addColorStop(1, '#8a7431');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.roundRect ? ctx.roundRect(x, y, barW, Math.max(h, 2), 4) : ctx.rect(x, y, barW, Math.max(h, 2));
-        ctx.fill();
+        const segments = [
+          { value: d.hadir, color: CHART_COLORS.hadir },
+          { value: d.izin, color: CHART_COLORS.izin },
+          { value: d.sakit, color: CHART_COLORS.sakit },
+        ];
+        segments.forEach(seg => {
+          if (seg.value <= 0) return;
+          const segH = (seg.value / max) * chartH;
+          const y = yCursor - segH;
+          ctx.fillStyle = seg.color;
+          ctx.beginPath();
+          ctx.roundRect ? ctx.roundRect(x, y, barW, Math.max(segH, 2), 2) : ctx.rect(x, y, barW, Math.max(segH, 2));
+          ctx.fill();
+          yCursor = y;
+        });
 
         ctx.fillStyle = '#f8f9fa';
         ctx.textAlign = 'center';
-        if (d.count > 0) ctx.fillText(String(d.count), x + barW / 2, y - 6);
+        if (total > 0) ctx.fillText(String(total), x + barW / 2, yCursor - 6);
 
         ctx.fillStyle = '#8891A8';
         ctx.fillText(d.label, x + barW / 2, height - 6);
