@@ -165,8 +165,38 @@ const wrap = (fn) => (req, res) => fn(req, res).catch((err) => {
 });
 
 app.get("/api/opsi", (req, res) => {
-  res.json({ kegiatan: KEGIATAN_OPTIONS, jenis: JENIS_OPTIONS, tempat: TEMPAT_OPTIONS });
+  res.json({
+    kegiatan: KEGIATAN_OPTIONS,
+    jenis: JENIS_OPTIONS,
+    tempat: TEMPAT_OPTIONS,
+    jamBuka: `${String(JAM_BUKA.jam).padStart(2, "0")}.${String(JAM_BUKA.menit).padStart(2, "0")}`,
+    jamBatasTerlambat: `${String(JAM_BATAS_TERLAMBAT.jam).padStart(2, "0")}.${String(JAM_BATAS_TERLAMBAT.menit).padStart(2, "0")}`,
+  });
 });
+
+// Endpoint publik: cek apakah nama tertentu sudah absen hari ini.
+// Dipakai halaman absen supaya orang tahu di awal (begitu pilih nama),
+// bukan baru ketahuan setelah isi seluruh form dan klik Kirim.
+app.get("/api/absen/cek", wrap(async (req, res) => {
+  const nama = (req.query.nama || "").trim();
+  if (!nama) {
+    return res.status(400).json({ error: "Nama wajib diisi." });
+  }
+  const { tanggal } = waktuJakartaSekarang();
+  const [rows] = await pool.query(
+    `SELECT waktu, status_kehadiran, terlambat FROM absen WHERE nama = ? AND waktu LIKE ? LIMIT 1`,
+    [nama, `${tanggal}%`]
+  );
+  if (rows.length === 0) {
+    return res.json({ sudahAbsen: false });
+  }
+  res.json({
+    sudahAbsen: true,
+    waktu: rows[0].waktu,
+    status: rows[0].status_kehadiran,
+    terlambat: rows[0].terlambat,
+  });
+}));
 
 // Endpoint publik: daftar peserta AKTIF saja (dipakai halaman absen buat isi dropdown nama).
 // Peserta yang sudah ditandai pensiun sengaja tidak dimunculkan di sini.

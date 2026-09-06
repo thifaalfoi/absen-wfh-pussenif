@@ -3,7 +3,6 @@ const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const preview = document.getElementById("preview");
 const namaInput = document.getElementById("nama");
-const nrpInfo = document.getElementById("nrpInfo");
 const kegiatanInput = document.getElementById("kegiatan");
 const kegiatanCatatanWrap = document.getElementById("kegiatanLainnyaWrap");
 const kegiatanCatatanInput = document.getElementById("kegiatanCatatan");
@@ -30,6 +29,11 @@ const mainApp = document.getElementById("mainApp");
 const btnMulai = document.getElementById("btnMulai");
 const qualityBadge = document.getElementById("qualityBadge");
 const qualityText = document.getElementById("qualityText");
+const jamInfoBadge = document.getElementById("jamInfoBadge");
+const jamInfoText = document.getElementById("jamInfoText");
+const sudahAbsenBadge = document.getElementById("sudahAbsenBadge");
+const sudahAbsenText = document.getElementById("sudahAbsenText");
+const btnReset = document.getElementById("btnReset");
 
 // Riwayat lokal (fitur 7)
 const btnRiwayat = document.getElementById("btnRiwayat");
@@ -55,20 +59,11 @@ btnMulai.addEventListener("click", () => {
 
 function updateDayBadge() {
   const today = new Date();
-  const dow = today.getDay(); // 0=Minggu, 1=Senin, 2=Selasa, 3=Rabu, 4=Kamis, 5=Jumat, 6=Sabtu
+  const dow = today.getDay(); // 0=Minggu ... 6=Sabtu
   const namaHari = HARI[dow];
 
-  // Jika hari Jumat (5), tampilkan keterangan WFH. Hari lain tidak usah.
-  if (dow === 5) {
-    dayBadge.textContent = `Hari ini: ${namaHari} (Jadwal WFH)`;
-    dayBadge.style.display = "inline-flex"; // atau sesuaikan tampilannya
-  } else if (dow >= 1 && dow <= 4) {
-    // Senin sampai Kamis (bukan WFH, tapi web tetap bisa dibuka/absen)
-    dayBadge.textContent = `Hari ini: ${namaHari}`;
-  } else {
-    // Sabtu & Minggu (opsional jika ingin diberi keterangan libur)
-    dayBadge.textContent = `Hari ini: ${namaHari} (Libur)`;
-  }
+  // Sementara dibuka setiap hari (bukan cuma Jumat)
+  dayBadge.textContent = `Hari ini: ${namaHari} (Jadwal WFH)`;
 }
 updateDayBadge();
 
@@ -102,22 +97,6 @@ function setStatus(msg, type) {
 // ==========================================================
 // Daftar peserta & kegiatan (dari API, dengan fallback aman)
 // ==========================================================
-let pesertaByNama = {}; // { "Nama Lengkap": { nrp, jenis, bagian, jabatan, tempat } }
-
-function tampilkanNrp() {
-  const data = pesertaByNama[namaInput.value];
-  if (data && data.nrp) {
-    nrpInfo.textContent = "NRP: " + data.nrp;
-    nrpInfo.style.display = "block";
-  } else if (namaInput.value) {
-    nrpInfo.textContent = "NRP tidak tercatat untuk peserta ini.";
-    nrpInfo.style.display = "block";
-  } else {
-    nrpInfo.style.display = "none";
-  }
-}
-namaInput.addEventListener("change", tampilkanNrp);
-
 async function loadPeserta() {
   namaInput.innerHTML = `<option value="">Memuat daftar peserta...</option>`;
   try {
@@ -126,7 +105,6 @@ async function loadPeserta() {
     const list = Array.isArray(data) ? data : data.data || data.peserta || [];
 
     namaInput.innerHTML = `<option value="">— pilih nama dari daftar peserta —</option>`;
-    pesertaByNama = {};
     for (const p of list) {
       const namaVal = p.nama_lengkap || p.nama || p.fullname || p;
       if (!namaVal) continue;
@@ -134,13 +112,6 @@ async function loadPeserta() {
       opt.value = namaVal;
       opt.textContent = namaVal;
       namaInput.appendChild(opt);
-      pesertaByNama[namaVal] = {
-        nrp: p.nrp || "",
-        jenis: p.jenis || "",
-        bagian: p.bagian || "",
-        jabatan: p.jabatan || "",
-        tempat: p.tempat || "",
-      };
     }
     if (list.length === 0) {
       namaInput.innerHTML = `<option value="">— daftar peserta masih kosong —</option>`;
@@ -164,6 +135,11 @@ async function loadOpsi() {
       opt.value = k;
       opt.textContent = k;
       kegiatanInput.appendChild(opt);
+    }
+
+    if (data.jamBuka && data.jamBatasTerlambat && jamInfoBadge) {
+      jamInfoText.textContent = `Absen dibuka jam ${data.jamBuka}. Tepat waktu sebelum jam ${data.jamBatasTerlambat}, lewat dari itu akan tercatat Terlambat.`;
+      jamInfoBadge.style.display = "flex";
     }
   } catch (err) {
     setStatus("Gagal memuat daftar kegiatan: " + err.message, "err");
@@ -524,6 +500,8 @@ btnRetake.addEventListener("click", () => {
 // ==========================================================
 // Validasi kesiapan form
 // ==========================================================
+let sudahAbsenHariIni = false;
+
 function checkFormReady() {
   const status = statusKehadiranInput.value;
   const perluIzinSakit = status === "Izin" || status === "Sakit";
@@ -536,12 +514,79 @@ function checkFormReady() {
     !!currentPosition &&
     !!namaInput.value &&
     catatanIzinSakitOk &&
-    lampiranOk;
+    lampiranOk &&
+    !sudahAbsenHariIni;
   btnSubmit.disabled = !ready;
 }
 namaInput.addEventListener("change", checkFormReady);
 kegiatanInput.addEventListener("change", checkFormReady);
 catatanInput.addEventListener("input", checkFormReady);
+
+// ==========================================================
+// Cek "sudah absen hari ini" begitu nama dipilih, supaya
+// orang tahu di awal (bukan baru ketahuan setelah klik Kirim).
+// ==========================================================
+async function cekSudahAbsen() {
+  const nama = namaInput.value;
+  sudahAbsenHariIni = false;
+  sudahAbsenBadge.style.display = "none";
+
+  if (!nama) {
+    checkFormReady();
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/absen/cek?nama=" + encodeURIComponent(nama));
+    const data = await res.json();
+    if (data.sudahAbsen) {
+      sudahAbsenHariIni = true;
+      const jam = data.waktu ? new Date(data.waktu).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "";
+      sudahAbsenText.textContent = `${nama} sudah tercatat absen hari ini (${data.status || "Hadir"}${jam ? ", jam " + jam : ""}). Tidak bisa absen dua kali.`;
+      sudahAbsenBadge.className = "loc-badge err";
+      sudahAbsenBadge.style.display = "flex";
+    }
+  } catch (err) {
+    // Kalau gagal cek, biarkan saja — validasi akhir tetap ada di server saat submit
+  }
+  checkFormReady();
+}
+namaInput.addEventListener("change", cekSudahAbsen);
+
+// ==========================================================
+// Tombol Reset — kembalikan form ke kondisi awal tanpa reload halaman
+// ==========================================================
+btnReset.addEventListener("click", () => {
+  namaInput.value = "";
+  kegiatanInput.value = "";
+  if (kegiatanCatatanInput) kegiatanCatatanInput.value = "";
+  if (kegiatanCatatanWrap) kegiatanCatatanWrap.style.display = "none";
+  statusKehadiranInput.value = "Hadir";
+  if (lampiranWrap) lampiranWrap.style.display = "none";
+  if (lampiranFile) lampiranFile.value = "";
+  lampiranDataUrl = null;
+  lampiranNamaFile = null;
+  catatanInput.value = "";
+  catatanCount.textContent = "0";
+  updateCatatanField();
+
+  capturedDataUrl = null;
+  preview.style.display = "none";
+  video.style.display = stream ? "block" : "none";
+  btnRetake.style.display = "none";
+  btnCamera.style.display = stream ? "none" : "block";
+  btnCapture.disabled = !stream;
+  stampEl.style.display = "none";
+  qualityBadge.className = "quality-badge";
+  photoQualityOk = false;
+
+  sudahAbsenHariIni = false;
+  sudahAbsenBadge.style.display = "none";
+  setWajahBadge("", "");
+
+  setStatus("Form direset. Silakan isi ulang.", "");
+  checkFormReady();
+});
 
 // ==========================================================
 // FITUR 7: Riwayat Lokal (localStorage) — per perangkat
@@ -614,6 +659,10 @@ btnSubmit.addEventListener("click", async () => {
 
   if (!nama) {
     setStatus("Pilih nama kamu dulu ya.", "err");
+    return;
+  }
+  if (sudahAbsenHariIni) {
+    setStatus("Kamu sudah tercatat absen hari ini. Tidak bisa absen dua kali.", "err");
     return;
   }
   if (!kegiatan) {
