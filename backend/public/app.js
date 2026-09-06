@@ -63,7 +63,7 @@ function updateDayBadge() {
   const namaHari = HARI[dow];
 
   // Sementara dibuka setiap hari (bukan cuma Jumat)
-  dayBadge.textContent = `Hari ini: ${namaHari} (Jadwal WFH)`;
+  dayBadge.textContent = `Hari ini: ${namaHari}`;
 }
 updateDayBadge();
 
