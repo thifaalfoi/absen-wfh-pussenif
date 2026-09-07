@@ -806,6 +806,20 @@
     </div>
   </div>
 
+  <!-- Modal preview lampiran (surat izin/sakit) -->
+  <div id="lampiranPreviewOverlay" class="confirm-overlay">
+    <div class="confirm-box" style="max-width:520px; text-align:center;">
+      <div class="confirm-title" style="margin-bottom:14px; text-align:left;">Lampiran</div>
+      <div id="lampiranPreviewBody" style="max-height:70vh; overflow:auto; display:flex; align-items:center; justify-content:center; background:var(--panel-2); border-radius:10px; padding:10px;">
+        <span style="color:var(--muted); font-size:13px;">Memuat...</span>
+      </div>
+      <div class="confirm-actions" style="margin-top:16px; justify-content:space-between;">
+        <a id="lampiranPreviewDownload" class="ghost" style="text-decoration:none; padding:9px 18px; border-radius:8px;" download>Unduh</a>
+        <button type="button" class="ghost" id="lampiranPreviewCloseBtn">Tutup</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toastContainer"></div>
 
   <header>
@@ -849,10 +863,14 @@
       </div>
 
       <div class="panel" id="belumAbsenPanel" style="padding:18px 22px; margin-bottom:22px;">
-        <div class="chart-title" style="margin-bottom:10px;">Belum Absen Hari Ini</div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+          <div class="chart-title" style="margin-bottom:0;">Belum Absen Hari Ini</div>
+          <button type="button" class="btn-table-action" id="btnSalinReminder" style="margin-right:0;" onclick="salinPesanReminder()">📋 Salin Pesan Reminder</button>
+        </div>
         <div id="belumAbsenList" style="display:flex; flex-wrap:wrap; gap:8px;">
           <span style="color:var(--muted); font-size:13px;">Memuat...</span>
         </div>
+        <div style="font-size:11px; color:var(--muted); margin-top:10px;">Belum ada nomor WA/email tersimpan di sistem, jadi pesan ini perlu ditempel &amp; dikirim manual ke grup.</div>
       </div>
 
       <div class="chart-panel">
@@ -869,7 +887,9 @@
       <div class="panel">
         <div class="toolbar" style="flex-wrap:wrap">
           <input type="text" id="search" placeholder="Cari nama..." />
-          <input type="date" id="tanggal" />
+          <input type="date" id="tanggalAwal" title="Dari tanggal" />
+          <span style="color:var(--muted); font-size:12px;">s/d</span>
+          <input type="date" id="tanggalAkhir" title="Sampai tanggal" />
           <select id="statusFilter" onchange="page=1; loadData();">
             <option value="">Semua Status</option>
             <option value="Hadir">Hadir</option>
@@ -965,6 +985,27 @@
         <div class="empty" id="pesertaEmpty" style="display:none">Belum ada peserta terdaftar.</div>
         <div class="status" id="wajahStatus" style="padding:0 18px 12px"></div>
       </div>
+    </div>
+
+    <div class="panel" style="margin-top:22px;">
+      <div class="toolbar" style="justify-content:space-between;">
+        <strong style="font-size:14px">Log Aktivitas Admin</strong>
+        <button class="ghost" onclick="loadAuditLog()">🔄 Muat Ulang</button>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:160px">Waktu</th>
+              <th style="width:170px">Aksi</th>
+              <th>Peserta / Data Terkait</th>
+              <th>Detail Perubahan</th>
+            </tr>
+          </thead>
+          <tbody id="auditLogBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="auditLogEmpty" style="display:none">Belum ada aktivitas tercatat.</div>
     </div>
   </main>
 
@@ -1198,6 +1239,7 @@
         loadStats();
         loadWeeklyChart();
         loadBelumAbsen();
+        loadAuditLog();
       } catch (e) {
         showToast('Gagal menghapus absen: ' + e.message, 'err');
       }
@@ -1237,6 +1279,41 @@
         editFotoPreview.src = editFotoDataUrl;
       };
       reader.readAsDataURL(file);
+    });
+
+    // ==========================================================
+    // Preview lampiran (surat izin/sakit) dalam modal, bukan tab baru
+    // ==========================================================
+    const lampiranPreviewOverlay = document.getElementById('lampiranPreviewOverlay');
+    const lampiranPreviewBody = document.getElementById('lampiranPreviewBody');
+    const lampiranPreviewDownload = document.getElementById('lampiranPreviewDownload');
+    const lampiranPreviewCloseBtn = document.getElementById('lampiranPreviewCloseBtn');
+
+    function bukaPreviewLampiran(id) {
+      const row = absenRowsById[id];
+      if (!row || !row.lampiran_url) {
+        showToast('Lampiran tidak ditemukan.', 'err');
+        return;
+      }
+      const url = row.lampiran_url;
+      lampiranPreviewDownload.href = url;
+      lampiranPreviewDownload.download = `lampiran-${row.nama || 'absen'}`;
+
+      if (url.startsWith('data:application/pdf')) {
+        lampiranPreviewBody.innerHTML = `<iframe src="${url}" style="width:100%; height:65vh; border:none; border-radius:6px;"></iframe>`;
+      } else {
+        lampiranPreviewBody.innerHTML = `<img src="${url}" alt="Lampiran" style="max-width:100%; max-height:65vh; border-radius:6px; object-fit:contain;" />`;
+      }
+      lampiranPreviewOverlay.classList.add('show');
+    }
+
+    function tutupPreviewLampiran() {
+      lampiranPreviewOverlay.classList.remove('show');
+      lampiranPreviewBody.innerHTML = '';
+    }
+    lampiranPreviewCloseBtn.addEventListener('click', tutupPreviewLampiran);
+    lampiranPreviewOverlay.addEventListener('click', (e) => {
+      if (e.target === lampiranPreviewOverlay) tutupPreviewLampiran();
     });
 
     async function bukaEditAbsen(id) {
@@ -1311,6 +1388,7 @@
         loadData();
         loadStats();
         loadBelumAbsen();
+        loadAuditLog();
       } catch (e) {
         editAbsenStatusEl.textContent = e.message;
         editAbsenStatusEl.className = 'status err';
@@ -1404,6 +1482,7 @@
         loadStats();
         loadWeeklyChart();
         loadBelumAbsen();
+        loadAuditLog();
       } catch (e) {
         tambahAbsenStatusEl.textContent = e.message;
         tambahAbsenStatusEl.className = 'status err';
@@ -1604,6 +1683,7 @@
       loadPeserta();
       loadWeeklyChart();
       loadBelumAbsen();
+      loadAuditLog();
     }
     document.getElementById('adminKeyLocked').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') unlock();
@@ -1620,7 +1700,8 @@
 
     function resetFilter() {
       document.getElementById('search').value = '';
-      document.getElementById('tanggal').value = '';
+      document.getElementById('tanggalAwal').value = '';
+      document.getElementById('tanggalAkhir').value = '';
       document.getElementById('statusFilter').value = '';
       page = 1;
       loadData();
@@ -1647,6 +1728,8 @@
     // ==========================================================
     // Fitur: daftar peserta aktif yang BELUM absen hari ini
     // ==========================================================
+    let namaBelumAbsenTerbaru = [];
+
     async function loadBelumAbsen() {
       const el = document.getElementById('belumAbsenList');
       el.innerHTML = '<span style="color:var(--muted); font-size:13px;">Memuat...</span>';
@@ -1663,6 +1746,7 @@
 
         const namaSudahAbsen = new Set((absenHariIni || []).map(r => r.nama));
         const belum = pesertaAktif.filter(p => !namaSudahAbsen.has(p.nama_lengkap));
+        namaBelumAbsenTerbaru = belum.map(p => p.nama_lengkap);
 
         if (belum.length === 0) {
           el.innerHTML = '<span style="color:var(--green); font-size:13px;">✓ Semua peserta aktif sudah absen hari ini.</span>';
@@ -1674,20 +1758,77 @@
       }
     }
 
+    function salinPesanReminder() {
+      if (namaBelumAbsenTerbaru.length === 0) {
+        showToast('Semua peserta aktif sudah absen hari ini — tidak ada yang perlu diingatkan.', 'ok');
+        return;
+      }
+      const tanggalHariIni = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      const daftarNama = namaBelumAbsenTerbaru.map((n, i) => `${i + 1}. ${n}`).join('\n');
+      const pesan = `Halo, mohon segera lakukan Absen WFH hari ini (${tanggalHariIni}) bagi yang belum:\n\n${daftarNama}\n\nTerima kasih.`;
+
+      navigator.clipboard.writeText(pesan)
+        .then(() => showToast('Pesan reminder disalin, tinggal paste ke grup WA/email.', 'ok'))
+        .catch(() => showToast('Gagal menyalin otomatis, salin manual dari sini:\n\n' + pesan, 'err'));
+    }
+
+    // ==========================================================
+    // Log audit — riwayat aksi admin (update/hapus/tambah/ubah status)
+    // ==========================================================
+    const AUDIT_LABEL = {
+      update_absen: 'Update Absen',
+      hapus_absen: 'Hapus Absen',
+      tambah_absen_manual: 'Tambah Absen Manual',
+      ubah_status_peserta: 'Ubah Status Peserta',
+      hapus_peserta: 'Hapus Peserta',
+    };
+
+    async function loadAuditLog() {
+      const tbody = document.getElementById('auditLogBody');
+      const empty = document.getElementById('auditLogEmpty');
+      try {
+        const res = await fetch('/api/audit-log?key=' + encodeURIComponent(adminKey) + '&limit=200');
+        const { data } = await res.json();
+        tbody.innerHTML = '';
+        if (!data || data.length === 0) {
+          empty.style.display = 'block';
+          return;
+        }
+        empty.style.display = 'none';
+        for (const log of data) {
+          const tr = document.createElement('tr');
+          const waktu = new Date(log.waktu).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+          const label = AUDIT_LABEL[log.aksi] || log.aksi;
+          tr.innerHTML = `
+            <td class="waktu">${waktu}</td>
+            <td>${escapeHtml(label)}</td>
+            <td>${escapeHtml(log.target_nama || '-')}</td>
+            <td style="color:var(--muted); font-size:12.5px;">${escapeHtml(log.detail || '-')}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+      } catch (e) {
+        empty.style.display = 'block';
+        empty.textContent = 'Gagal memuat log aktivitas.';
+      }
+    }
+
     async function loadData() {
       const status = document.getElementById('status');
       const table = document.getElementById('table');
       const tbody = document.getElementById('tbody');
       const emptyMsg = document.getElementById('emptyMsg');
       const search = document.getElementById('search').value.trim();
-      const tanggal = document.getElementById('tanggal').value;
+      const tanggalAwal = document.getElementById('tanggalAwal').value;
+      const tanggalAkhir = document.getElementById('tanggalAkhir').value;
       const statusFilter = document.getElementById('statusFilter').value;
 
       status.textContent = 'Memuat...';
 
       const params = new URLSearchParams({ key: adminKey, page, limit });
       if (search) params.set('search', search);
-      if (tanggal) params.set('tanggal', tanggal);
+      if (tanggalAwal) params.set('tanggalAwal', tanggalAwal);
+      if (tanggalAkhir) params.set('tanggalAkhir', tanggalAkhir);
       if (statusFilter) params.set('status_kehadiran', statusFilter);
 
       try {
@@ -1720,7 +1861,7 @@
             const badgeClass = kehadiran === 'Izin' ? 'badge-izin' : (kehadiran === 'Sakit' ? 'badge-sakit' : 'badge-hadir');
             const catatanText = row.catatan ? escapeHtml(row.catatan) : '<span style="color:var(--muted)">—</span>';
             const lampiranCell = row.lampiran_url
-              ? `<a class="lampiranlink" target="_blank" href="${row.lampiran_url}">📎 Lihat</a>`
+              ? `<button type="button" class="lampiranlink" style="background:none;border:none;padding:0;cursor:pointer;color:var(--gold);text-decoration:underline;font-size:13px;" onclick="bukaPreviewLampiran('${row._id || row.id || row.id_absen || ''}')">📎 Lihat</button>`
               : '<span style="color:var(--muted)">—</span>';
             
             const recordId = row._id || row.id || row.id_absen || '';
@@ -1767,17 +1908,20 @@
 
     function exportCsv() {
       const search = document.getElementById('search').value.trim();
-      const tanggal = document.getElementById('tanggal').value;
+      const tanggalAwal = document.getElementById('tanggalAwal').value;
+      const tanggalAkhir = document.getElementById('tanggalAkhir').value;
       const statusFilter = document.getElementById('statusFilter').value;
       const params = new URLSearchParams({ key: adminKey });
       if (search) params.set('search', search);
-      if (tanggal) params.set('tanggal', tanggal);
+      if (tanggalAwal) params.set('tanggalAwal', tanggalAwal);
+      if (tanggalAkhir) params.set('tanggalAkhir', tanggalAkhir);
       if (statusFilter) params.set('status_kehadiran', statusFilter);
       window.open('/api/absen/export?' + params.toString(), '_blank');
     }
 
     document.getElementById('search').addEventListener('input', () => { page = 1; loadData(); });
-    document.getElementById('tanggal').addEventListener('change', () => { page = 1; loadData(); });
+    document.getElementById('tanggalAwal').addEventListener('change', () => { page = 1; loadData(); });
+    document.getElementById('tanggalAkhir').addEventListener('change', () => { page = 1; loadData(); });
 
     const toastContainer = document.getElementById('toastContainer');
     function showToast(msg, type, duration) {
@@ -1806,11 +1950,13 @@
 
     async function exportExcel() {
       const search = document.getElementById('search').value.trim();
-      const tanggal = document.getElementById('tanggal').value;
+      const tanggalAwal = document.getElementById('tanggalAwal').value;
+      const tanggalAkhir = document.getElementById('tanggalAkhir').value;
       const statusFilter = document.getElementById('statusFilter').value;
       const params = new URLSearchParams({ key: adminKey, page: 1, limit: 10000 });
       if (search) params.set('search', search);
-      if (tanggal) params.set('tanggal', tanggal);
+      if (tanggalAwal) params.set('tanggalAwal', tanggalAwal);
+      if (tanggalAkhir) params.set('tanggalAkhir', tanggalAkhir);
       if (statusFilter) params.set('status_kehadiran', statusFilter);
 
       showToast('Menyiapkan file Excel...', 'info', 2000);
@@ -1832,7 +1978,7 @@
           Terlambat: row.terlambat === 'Ya' ? 'Ya' : 'Tidak',
           Kegiatan: row.kegiatan === 'Lainnya' && row.kegiatan_catatan ? `${row.kegiatan} — ${row.kegiatan_catatan}` : (row.kegiatan || ''),
           Catatan: row.catatan || '',
-          Lampiran: row.lampiran_url || '',
+          'Link Lampiran': row.lampiran_url ? `${window.location.origin}/api/absen/${row.id}/lampiran?key=${encodeURIComponent(adminKey)}` : '-',
           Latitude: row.lat,
           Longitude: row.lng,
         }));
@@ -1970,3 +2116,4 @@
   </script>
 </body>
 </html>
+```[cite: 5]

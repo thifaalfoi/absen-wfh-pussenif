@@ -67,6 +67,19 @@ async function initDb() {
       )
     `);
 
+    // Log audit — mencatat setiap aksi admin (update/hapus/tambah manual/ubah status)
+    // supaya ada jejak "apa yang berubah dan kapan".
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id VARCHAR(36) PRIMARY KEY,
+        waktu VARCHAR(40) NOT NULL,
+        aksi VARCHAR(50) NOT NULL,
+        target_nama VARCHAR(255),
+        detail TEXT,
+        INDEX idx_audit_waktu (waktu)
+      )
+    `);
+
     await tambahKolomJikaBelumAda("peserta", "nrp", "VARCHAR(50)");
     await tambahKolomJikaBelumAda("peserta", "jenis", "VARCHAR(10)");
     await tambahKolomJikaBelumAda("peserta", "bagian", "VARCHAR(150)");
@@ -163,6 +176,29 @@ const wrap = (fn) => (req, res) => fn(req, res).catch((err) => {
   console.error(err);
   res.status(500).json({ error: "Terjadi kesalahan di server." });
 });
+
+// Mencatat satu baris log audit. Dipanggil "fire and forget" (tidak menghentikan
+// alur utama kalau gagal) supaya fitur audit tidak sampai bikin aksi utama gagal.
+async function catatAudit(aksi, targetNama, detail) {
+  try {
+    await pool.query(
+      `INSERT INTO audit_log (id, waktu, aksi, target_nama, detail) VALUES (?, ?, ?, ?, ?)`,
+      [crypto.randomUUID(), new Date().toISOString(), aksi, targetNama || null, detail || null]
+    );
+  } catch (err) {
+    console.error("Gagal mencatat audit log:", err);
+  }
+}
+
+// Admin: lihat log audit terbaru
+app.get("/api/audit-log", requireAdminKey, wrap(async (req, res) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 1000);
+  const [rows] = await pool.query(
+    `SELECT id, waktu, aksi, target_nama, detail FROM audit_log ORDER BY waktu DESC LIMIT ?`,
+    [limit]
+  );
+  res.json({ data: rows });
+}));
 
 app.get("/api/opsi", (req, res) => {
   res.json({
@@ -264,7 +300,9 @@ app.patch("/api/peserta/:id/status", requireAdminKey, wrap(async (req, res) => {
   if (!["Aktif", "Pensiun"].includes(status_pensiun)) {
     return res.status(400).json({ error: 'Status harus "Aktif" atau "Pensiun".' });
   }
+  const [[peserta]] = await pool.query(`SELECT nama_lengkap FROM peserta WHERE id = ?`, [req.params.id]);
   await pool.query(`UPDATE peserta SET status_pensiun = ? WHERE id = ?`, [status_pensiun, req.params.id]);
+  catatAudit("ubah_status_peserta", peserta ? peserta.nama_lengkap : null, `Status pegawai diubah menjadi "${status_pensiun}"`);
   res.json({ ok: true });
 }));
 
@@ -334,7 +372,9 @@ app.post("/api/peserta/bulk", requireAdminKey, wrap(async (req, res) => {
 }));
 
 app.delete("/api/peserta/:id", requireAdminKey, wrap(async (req, res) => {
+  const [[peserta]] = await pool.query(`SELECT nama_lengkap FROM peserta WHERE id = ?`, [req.params.id]);
   await pool.query(`DELETE FROM peserta WHERE id = ?`, [req.params.id]);
+  catatAudit("hapus_peserta", peserta ? peserta.nama_lengkap : null, "Peserta dihapus dari daftar");
   res.json({ ok: true });
 }));
 
@@ -497,6 +537,7 @@ app.post("/api/absen/manual", requireAdminKey, wrap(async (req, res) => {
       "Tidak",
     ]
   );
+  catatAudit("tambah_absen_manual", nama.toString().trim(), `Status: ${statusKehadiran}, waktu: ${waktuFinal}`);
 
   res.json({ ok: true, id, waktu: waktuFinal });
 }));
@@ -507,6 +548,8 @@ app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
   const offset = (page - 1) * limit;
   const search = (req.query.search || "").trim();
   const tanggal = (req.query.tanggal || "").trim();
+  const tanggalAwal = (req.query.tanggalAwal || "").trim();
+  const tanggalAkhir = (req.query.tanggalAkhir || "").trim();
   const statusKehadiranFilter = (req.query.status_kehadiran || "").trim();
 
   let where = "WHERE 1=1";
@@ -518,6 +561,14 @@ app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
   if (tanggal) {
     where += " AND waktu LIKE ?";
     params.push(`${tanggal}%`);
+  }
+  if (tanggalAwal) {
+    where += " AND waktu >= ?";
+    params.push(`${tanggalAwal}T00:00:00`);
+  }
+  if (tanggalAkhir) {
+    where += " AND waktu <= ?";
+    params.push(`${tanggalAkhir}T23:59:59.999`);
   }
   if (statusKehadiranFilter && STATUS_KEHADIRAN_OPTIONS.includes(statusKehadiranFilter)) {
     where += " AND status_kehadiran = ?";
@@ -549,8 +600,27 @@ app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
   res.json({ data, total, page, limit, totalPages: Math.max(Math.ceil(total / limit), 1) });
 }));
 
+// Serve lampiran (surat izin/sakit) sebagai file biasa (bukan base64 JSON),
+// supaya bisa dibuka lewat link langsung — dipakai di kolom link Export CSV/Excel.
+app.get("/api/absen/:id/lampiran", requireAdminKey, wrap(async (req, res) => {
+  const [[row]] = await pool.query(`SELECT lampiran FROM absen WHERE id = ?`, [req.params.id]);
+  if (!row || !row.lampiran) {
+    return res.status(404).send("Lampiran tidak ditemukan.");
+  }
+  const match = row.lampiran.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) {
+    return res.status(400).send("Format lampiran tidak valid.");
+  }
+  const [, mimeType, base64Data] = match;
+  const buffer = Buffer.from(base64Data, "base64");
+  res.setHeader("Content-Type", mimeType);
+  res.send(buffer);
+}));
+
 app.delete("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
+  const [[row]] = await pool.query(`SELECT nama, waktu FROM absen WHERE id = ?`, [req.params.id]);
   await pool.query(`DELETE FROM absen WHERE id = ?`, [req.params.id]);
+  catatAudit("hapus_absen", row ? row.nama : null, row ? `Data absen waktu ${row.waktu} dihapus` : "Data absen dihapus");
   res.json({ ok: true });
 }));
 
@@ -559,6 +629,9 @@ app.patch("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
   const { nama, status_kehadiran, kegiatan, catatan, foto } = req.body;
   const fields = [];
   const params = [];
+  const perubahan = [];
+
+  const [[sebelum]] = await pool.query(`SELECT nama, status_kehadiran FROM absen WHERE id = ?`, [req.params.id]);
 
   if (nama !== undefined) {
     if (!nama || !nama.toString().trim()) {
@@ -566,6 +639,9 @@ app.patch("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
     }
     fields.push("nama = ?");
     params.push(nama.toString().trim());
+    if (sebelum && sebelum.nama !== nama.toString().trim()) {
+      perubahan.push(`nama: "${sebelum.nama}" → "${nama.toString().trim()}"`);
+    }
   }
   if (status_kehadiran !== undefined) {
     if (!STATUS_KEHADIRAN_OPTIONS.includes(status_kehadiran)) {
@@ -573,6 +649,9 @@ app.patch("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
     }
     fields.push("status_kehadiran = ?");
     params.push(status_kehadiran);
+    if (sebelum && sebelum.status_kehadiran !== status_kehadiran) {
+      perubahan.push(`status: "${sebelum.status_kehadiran}" → "${status_kehadiran}"`);
+    }
   }
   if (kegiatan !== undefined) {
     fields.push("kegiatan = ?");
@@ -588,6 +667,7 @@ app.patch("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
     }
     fields.push("foto_path = ?");
     params.push(foto);
+    perubahan.push("foto diganti");
   }
 
   if (fields.length === 0) {
@@ -599,6 +679,7 @@ app.patch("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
   if (result.affectedRows === 0) {
     return res.status(404).json({ error: "Data absen tidak ditemukan." });
   }
+  catatAudit("update_absen", (nama || (sebelum && sebelum.nama)), perubahan.length ? perubahan.join("; ") : "Data diperbarui");
   res.json({ ok: true });
 }));
 
@@ -636,6 +717,8 @@ app.get("/api/absen/stats", requireAdminKey, wrap(async (req, res) => {
 app.get("/api/absen/export", requireAdminKey, wrap(async (req, res) => {
   const search = (req.query.search || "").trim();
   const tanggal = (req.query.tanggal || "").trim();
+  const tanggalAwal = (req.query.tanggalAwal || "").trim();
+  const tanggalAkhir = (req.query.tanggalAkhir || "").trim();
   const statusKehadiranFilter = (req.query.status_kehadiran || "").trim();
 
   let where = "WHERE 1=1";
@@ -648,22 +731,33 @@ app.get("/api/absen/export", requireAdminKey, wrap(async (req, res) => {
     where += " AND waktu LIKE ?";
     params.push(`${tanggal}%`);
   }
+  if (tanggalAwal) {
+    where += " AND waktu >= ?";
+    params.push(`${tanggalAwal}T00:00:00`);
+  }
+  if (tanggalAkhir) {
+    where += " AND waktu <= ?";
+    params.push(`${tanggalAkhir}T23:59:59.999`);
+  }
   if (statusKehadiranFilter && STATUS_KEHADIRAN_OPTIONS.includes(statusKehadiranFilter)) {
     where += " AND status_kehadiran = ?";
     params.push(statusKehadiranFilter);
   }
 
   const [rows] = await pool.query(
-    `SELECT nama, waktu, status, status_kehadiran, terlambat, kegiatan, kegiatan_catatan, catatan, lampiran, lat, lng, akurasi FROM absen ${where} ORDER BY waktu DESC`,
+    `SELECT id, nama, waktu, status, status_kehadiran, terlambat, kegiatan, kegiatan_catatan, catatan, lampiran, lat, lng, akurasi FROM absen ${where} ORDER BY waktu DESC`,
     params
   );
 
-  let csv = "Nama,Waktu,Status Kehadiran,Terlambat,Kegiatan,Catatan,Lampiran,Latitude,Longitude,Akurasi(m)\n";
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const adminKeyForLink = (req.query.key || "").toString();
+
+  let csv = "Nama,Waktu,Status Kehadiran,Terlambat,Kegiatan,Catatan,Link Lampiran,Latitude,Longitude,Akurasi(m)\n";
   for (const r of rows) {
     const kegiatanFinal = r.kegiatan === "Lainnya" ? `${r.kegiatan} - ${r.kegiatan_catatan || ""}` : r.kegiatan;
     const kehadiran = r.status_kehadiran || r.status || "Hadir";
-    const adaLampiran = r.lampiran ? "Ada" : "-";
-    csv += `"${r.nama.replace(/"/g, '""')}",${r.waktu},"${kehadiran}","${r.terlambat || ""}","${kegiatanFinal || ""}","${(r.catatan || "").replace(/"/g, '""')}","${adaLampiran}",${r.lat},${r.lng},${r.akurasi ?? ""}\n`;
+    const linkLampiran = r.lampiran ? `${baseUrl}/api/absen/${r.id}/lampiran?key=${encodeURIComponent(adminKeyForLink)}` : "-";
+    csv += `"${r.nama.replace(/"/g, '""')}",${r.waktu},"${kehadiran}","${r.terlambat || ""}","${kegiatanFinal || ""}","${(r.catatan || "").replace(/"/g, '""')}","${linkLampiran}",${r.lat},${r.lng},${r.akurasi ?? ""}\n`;
   }
 
   res.setHeader("Content-Type", "text/csv");
