@@ -110,6 +110,7 @@ async function initDb() {
     await tambahKolomJikaBelumAda("absen", "catatan", "TEXT"); // catatan tugas (Hadir) / catatan izin / catatan sakit
     await tambahKolomJikaBelumAda("absen", "lampiran", "LONGTEXT"); // file surat izin/sakit (base64 data URL)
     await tambahKolomJikaBelumAda("absen", "lampiran_nama", "VARCHAR(255)");
+    await tambahKolomJikaBelumAda("audit_log", "oleh_admin", "VARCHAR(150)"); // nama admin yang melakukan aksi (self-reported saat login)
 
     try {
       await pool.query(`ALTER TABLE absen MODIFY COLUMN foto_path LONGTEXT`);
@@ -202,6 +203,10 @@ function menitSejakTengahMalam({ jam, menit }) {
 }
 
 function requireAdminKey(req, res, next) {
+  const key = req.query.key || req.headers["x-admin-key"];
+  if (!key || key !== ADMIN_KEY) {
+    return res.status(401).json({ error: "Kunci admin tidak valid atau belum diisi." });
+  }
   next();
 }
 
@@ -212,11 +217,11 @@ const wrap = (fn) => (req, res) => fn(req, res).catch((err) => {
 
 // Mencatat satu baris log audit. Dipanggil "fire and forget" (tidak menghentikan
 // alur utama kalau gagal) supaya fitur audit tidak sampai bikin aksi utama gagal.
-async function catatAudit(aksi, targetNama, detail) {
+async function catatAudit(aksi, targetNama, detail, olehAdmin) {
   try {
     await pool.query(
-      `INSERT INTO audit_log (id, waktu, aksi, target_nama, detail) VALUES (?, ?, ?, ?, ?)`,
-      [crypto.randomUUID(), new Date().toISOString(), aksi, targetNama || null, detail || null]
+      `INSERT INTO audit_log (id, waktu, aksi, target_nama, detail, oleh_admin) VALUES (?, ?, ?, ?, ?, ?)`,
+      [crypto.randomUUID(), new Date().toISOString(), aksi, targetNama || null, detail || null, olehAdmin || null]
     );
   } catch (err) {
     console.error("Gagal mencatat audit log:", err);
@@ -256,7 +261,7 @@ async function kirimWA(nomorTujuan, pesan) {
 app.get("/api/audit-log", requireAdminKey, wrap(async (req, res) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 1000);
   const [rows] = await pool.query(
-    `SELECT id, waktu, aksi, target_nama, detail FROM audit_log ORDER BY waktu DESC LIMIT ?`,
+    `SELECT id, waktu, aksi, target_nama, detail, oleh_admin FROM audit_log ORDER BY waktu DESC LIMIT ?`,
     [limit]
   );
   res.json({ data: rows });
@@ -319,7 +324,7 @@ app.get("/api/cron/reminder", wrap(async (req, res) => {
     if (kirim.ok) {
       hasil.belumAbsen.terkirim++;
       await tandaiTerkirim(p.nama_lengkap, "belum_absen");
-      await catatAudit("reminder_otomatis", p.nama_lengkap, "Reminder belum absen terkirim via WA");
+      await catatAudit("reminder_otomatis", p.nama_lengkap, "Reminder belum absen terkirim via WA", "Sistem Otomatis");
     } else {
       hasil.belumAbsen.gagal++;
     }
@@ -333,7 +338,7 @@ app.get("/api/cron/reminder", wrap(async (req, res) => {
     if (kirim.ok) {
       hasil.terlambat.terkirim++;
       await tandaiTerkirim(p.nama_lengkap, "terlambat");
-      await catatAudit("reminder_otomatis", p.nama_lengkap, "Reminder terlambat terkirim via WA");
+      await catatAudit("reminder_otomatis", p.nama_lengkap, "Reminder terlambat terkirim via WA", "Sistem Otomatis");
     } else {
       hasil.terlambat.gagal++;
     }
@@ -444,7 +449,7 @@ app.patch("/api/peserta/:id/status", requireAdminKey, wrap(async (req, res) => {
   }
   const [[peserta]] = await pool.query(`SELECT nama_lengkap FROM peserta WHERE id = ?`, [req.params.id]);
   await pool.query(`UPDATE peserta SET status_pensiun = ? WHERE id = ?`, [status_pensiun, req.params.id]);
-  catatAudit("ubah_status_peserta", peserta ? peserta.nama_lengkap : null, `Status pegawai diubah menjadi "${status_pensiun}"`);
+  catatAudit("ubah_status_peserta", peserta ? peserta.nama_lengkap : null, `Status pegawai diubah menjadi "${status_pensiun}"`, req.query.oleh);
   res.json({ ok: true });
 }));
 
@@ -492,7 +497,7 @@ app.patch("/api/peserta/:id", requireAdminKey, wrap(async (req, res) => {
   if (result.affectedRows === 0) {
     return res.status(404).json({ error: "Peserta tidak ditemukan." });
   }
-  catatAudit("edit_peserta", peserta ? peserta.nama_lengkap : null, "Data peserta diperbarui");
+  catatAudit("edit_peserta", peserta ? peserta.nama_lengkap : null, "Data peserta diperbarui", req.query.oleh);
   res.json({ ok: true });
 }));
 
@@ -544,7 +549,7 @@ app.post("/api/peserta/bulk", requireAdminKey, wrap(async (req, res) => {
 app.delete("/api/peserta/:id", requireAdminKey, wrap(async (req, res) => {
   const [[peserta]] = await pool.query(`SELECT nama_lengkap FROM peserta WHERE id = ?`, [req.params.id]);
   await pool.query(`DELETE FROM peserta WHERE id = ?`, [req.params.id]);
-  catatAudit("hapus_peserta", peserta ? peserta.nama_lengkap : null, "Peserta dihapus dari daftar");
+  catatAudit("hapus_peserta", peserta ? peserta.nama_lengkap : null, "Peserta dihapus dari daftar", req.query.oleh);
   res.json({ ok: true });
 }));
 
@@ -707,7 +712,7 @@ app.post("/api/absen/manual", requireAdminKey, wrap(async (req, res) => {
       "Tidak",
     ]
   );
-  catatAudit("tambah_absen_manual", nama.toString().trim(), `Status: ${statusKehadiran}, waktu: ${waktuFinal}`);
+  catatAudit("tambah_absen_manual", nama.toString().trim(), `Status: ${statusKehadiran}, waktu: ${waktuFinal}`, req.query.oleh);
 
   res.json({ ok: true, id, waktu: waktuFinal });
 }));
@@ -790,7 +795,7 @@ app.get("/api/absen/:id/lampiran", requireAdminKey, wrap(async (req, res) => {
 app.delete("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
   const [[row]] = await pool.query(`SELECT nama, waktu FROM absen WHERE id = ?`, [req.params.id]);
   await pool.query(`DELETE FROM absen WHERE id = ?`, [req.params.id]);
-  catatAudit("hapus_absen", row ? row.nama : null, row ? `Data absen waktu ${row.waktu} dihapus` : "Data absen dihapus");
+  catatAudit("hapus_absen", row ? row.nama : null, row ? `Data absen waktu ${row.waktu} dihapus` : "Data absen dihapus", req.query.oleh);
   res.json({ ok: true });
 }));
 
@@ -849,8 +854,107 @@ app.patch("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
   if (result.affectedRows === 0) {
     return res.status(404).json({ error: "Data absen tidak ditemukan." });
   }
-  catatAudit("update_absen", (nama || (sebelum && sebelum.nama)), perubahan.length ? perubahan.join("; ") : "Data diperbarui");
+  catatAudit("update_absen", (nama || (sebelum && sebelum.nama)), perubahan.length ? perubahan.join("; ") : "Data diperbarui", req.query.oleh);
   res.json({ ok: true });
+}));
+
+// Admin: deteksi kalau ada 2+ orang absen dari titik GPS yang nyaris sama
+// pada tanggal yang sama — indikasi kemungkinan titip absen/pinjam HP.
+// (Pengganti "geofencing kantor" yang kurang relevan untuk sistem WFH.)
+app.get("/api/absen/lokasi-mencurigakan", requireAdminKey, wrap(async (req, res) => {
+  const tanggal = (req.query.tanggal || waktuJakartaSekarang().tanggal).trim();
+  const RADIUS_METER = 30; // dianggap "sama titik" kalau jaraknya di bawah ini
+
+  const [rows] = await pool.query(
+    `SELECT id, nama, waktu, lat, lng FROM absen WHERE waktu LIKE ? AND lat IS NOT NULL AND lng IS NOT NULL`,
+    [`${tanggal}%`]
+  );
+
+  function jarakMeter(lat1, lng1, lat2, lng2) {
+    const R = 6371000;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+  }
+
+  const kelompok = [];
+  const sudahDicek = new Set();
+  for (let i = 0; i < rows.length; i++) {
+    if (sudahDicek.has(rows[i].id)) continue;
+    const grup = [rows[i]];
+    for (let j = i + 1; j < rows.length; j++) {
+      if (rows[i].nama === rows[j].nama) continue; // orang yang sama, wajar
+      if (jarakMeter(rows[i].lat, rows[i].lng, rows[j].lat, rows[j].lng) <= RADIUS_METER) {
+        grup.push(rows[j]);
+        sudahDicek.add(rows[j].id);
+      }
+    }
+    if (grup.length > 1) {
+      sudahDicek.add(rows[i].id);
+      kelompok.push(grup.map((r) => ({ nama: r.nama, waktu: r.waktu, lat: r.lat, lng: r.lng })));
+    }
+  }
+
+  res.json({ tanggal, radiusMeter: RADIUS_METER, kelompok });
+}));
+
+// Admin: rekap bulanan per orang — total Hadir/Izin/Sakit/Terlambat dalam satu bulan
+app.get("/api/rekap-bulanan", requireAdminKey, wrap(async (req, res) => {
+  const bulan = (req.query.bulan || "").trim(); // format: YYYY-MM
+  if (!/^\d{4}-\d{2}$/.test(bulan)) {
+    return res.status(400).json({ error: "Parameter bulan wajib format YYYY-MM." });
+  }
+
+  const [rows] = await pool.query(
+    `SELECT nama, status_kehadiran, terlambat FROM absen WHERE waktu LIKE ?`,
+    [`${bulan}%`]
+  );
+
+  const rekap = {};
+  for (const r of rows) {
+    if (!rekap[r.nama]) {
+      rekap[r.nama] = { nama: r.nama, hadir: 0, izin: 0, sakit: 0, terlambat: 0, total: 0 };
+    }
+    const status = r.status_kehadiran || "Hadir";
+    if (status === "Izin") rekap[r.nama].izin++;
+    else if (status === "Sakit") rekap[r.nama].sakit++;
+    else rekap[r.nama].hadir++;
+    if (r.terlambat === "Ya") rekap[r.nama].terlambat++;
+    rekap[r.nama].total++;
+  }
+
+  const data = Object.values(rekap).sort((a, b) => b.terlambat - a.terlambat || b.total - a.total);
+  res.json({ bulan, data });
+}));
+
+// Admin: backup seluruh data (peserta, absen, audit_log) sebagai satu file JSON.
+// Tidak menyertakan foto/wajah/lampiran base64 (biar file tidak raksasa) —
+// kalau perlu foto, tetap ada di tiap record lewat halaman biasa.
+app.get("/api/backup", requireAdminKey, wrap(async (req, res) => {
+  const [peserta] = await pool.query(
+    `SELECT id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, nomor_telepon, dibuat_pada, status_pensiun FROM peserta`
+  );
+  const [absen] = await pool.query(
+    `SELECT id, nama, waktu, lat, lng, akurasi, status, status_kehadiran, kegiatan, kegiatan_catatan, catatan, terlambat FROM absen`
+  );
+  const [auditLog] = await pool.query(
+    `SELECT id, waktu, aksi, target_nama, detail, oleh_admin FROM audit_log`
+  );
+
+  const backup = {
+    dibuat_pada: new Date().toISOString(),
+    catatan: "Backup ini tidak menyertakan foto selfie, foto wajah, dan lampiran (base64) supaya ukuran file tetap wajar.",
+    peserta,
+    absen,
+    audit_log: auditLog,
+  };
+
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Content-Disposition", `attachment; filename="backup-absen-wfh-${new Date().toISOString().slice(0, 10)}.json"`);
+  res.send(JSON.stringify(backup, null, 2));
 }));
 
 app.get("/api/absen/stats", requireAdminKey, wrap(async (req, res) => {
