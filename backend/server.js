@@ -9,6 +9,8 @@ const crypto = require("crypto");
 
 const PORT = process.env.PORT || 3000;
 const ADMIN_KEY = process.env.ADMIN_KEY || "ganti-kunci-ini";
+const FONNTE_TOKEN = process.env.FONNTE_TOKEN || "";
+const CRON_SECRET = process.env.CRON_SECRET || "";
 
 const UPLOAD_DIR = process.env.VERCEL ? "/tmp/uploads" : path.join(__dirname, "uploads");
 
@@ -80,6 +82,19 @@ async function initDb() {
       )
     `);
 
+    // Mencegah reminder WA terkirim dobel ke orang yang sama di hari yang sama
+    // (misal kalau cron job ke-trigger lebih dari sekali).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS reminder_terkirim (
+        id VARCHAR(36) PRIMARY KEY,
+        nama VARCHAR(255) NOT NULL,
+        tanggal VARCHAR(10) NOT NULL,
+        jenis VARCHAR(20) NOT NULL,
+        waktu VARCHAR(40) NOT NULL,
+        UNIQUE KEY uniq_reminder (nama, tanggal, jenis)
+      )
+    `);
+
     await tambahKolomJikaBelumAda("peserta", "nrp", "VARCHAR(50)");
     await tambahKolomJikaBelumAda("peserta", "jenis", "VARCHAR(10)");
     await tambahKolomJikaBelumAda("peserta", "bagian", "VARCHAR(150)");
@@ -132,7 +147,11 @@ async function initDb() {
   }
 }
 
-initDb();
+// PENTING: initDb() ini membuat/menambah kolom database secara async.
+// Simpan promise-nya (jangan cuma "initDb();" tanpa ditunggu) supaya kita bisa
+// pastikan semua request nunggu migrasi selesai dulu — mencegah race condition
+// di mana request pertama pas cold start bisa nyasar ke kolom yang belum ada.
+const dbSiap = initDb();
 
 const KEGIATAN_OPTIONS = [
   "Mengerjakan tugas dari pembimbing/atasan",
@@ -152,6 +171,19 @@ app.use("/uploads", express.static(UPLOAD_DIR));
 
 // PANGGILAN STATIC UTAMA: Mengarah langsung ke folder public
 app.use(express.static(path.join(__dirname, "public")));
+
+// Tunggu migrasi database selesai dulu sebelum memproses request ke /api/*.
+// Ini mencegah error "Unknown column" pas cold start Vercel, di mana request
+// pertama bisa masuk sebelum initDb() sempat selesai menambah kolom baru.
+app.use("/api", async (req, res, next) => {
+  try {
+    await dbSiap;
+    next();
+  } catch (err) {
+    console.error("Database belum siap:", err);
+    res.status(503).json({ error: "Server sedang menyiapkan database, coba lagi sebentar lagi." });
+  }
+});
 
 function waktuJakartaSekarang() {
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
@@ -191,6 +223,35 @@ async function catatAudit(aksi, targetNama, detail) {
   }
 }
 
+// Kirim satu pesan WhatsApp lewat Fonnte. Mengembalikan { ok, error }.
+// Nomor diformat ke standar internasional (62...) supaya diterima Fonnte.
+async function kirimWA(nomorTujuan, pesan) {
+  if (!FONNTE_TOKEN) {
+    return { ok: false, error: "FONNTE_TOKEN belum diset di environment variable." };
+  }
+  let nomor = (nomorTujuan || "").toString().replace(/[^0-9]/g, "");
+  if (nomor.startsWith("0")) nomor = "62" + nomor.slice(1);
+  else if (!nomor.startsWith("62")) nomor = "62" + nomor;
+
+  try {
+    const res = await fetch("https://api.fonnte.com/send", {
+      method: "POST",
+      headers: {
+        Authorization: FONNTE_TOKEN,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ target: nomor, message: pesan }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.status === false) {
+      return { ok: false, error: data.reason || `Fonnte merespons status ${res.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
 // Admin: lihat log audit terbaru
 app.get("/api/audit-log", requireAdminKey, wrap(async (req, res) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 1000);
@@ -199,6 +260,86 @@ app.get("/api/audit-log", requireAdminKey, wrap(async (req, res) => {
     [limit]
   );
   res.json({ data: rows });
+}));
+
+// ==========================================================
+// Bot reminder otomatis — dipicu oleh Vercel Cron sekali sehari.
+// Cek siapa yang belum absen & siapa yang terlambat, lalu kirim WA
+// otomatis lewat Fonnte. Dilindungi CRON_SECRET, bukan ADMIN_KEY,
+// karena yang manggil ini Vercel sendiri, bukan admin dari browser.
+// ==========================================================
+app.get("/api/cron/reminder", wrap(async (req, res) => {
+  if (!CRON_SECRET || req.query.secret !== CRON_SECRET) {
+    return res.status(403).json({ error: "Secret tidak valid." });
+  }
+  if (!FONNTE_TOKEN) {
+    return res.status(500).json({ error: "FONNTE_TOKEN belum diset di environment variable." });
+  }
+
+  const sekarang = waktuJakartaSekarang();
+  if (sekarang.hari === 0 || sekarang.hari === 6) {
+    return res.json({ ok: true, info: "Hari libur (Sabtu/Minggu), reminder dilewati." });
+  }
+  const tanggal = sekarang.tanggal;
+
+  const [pesertaAktif] = await pool.query(
+    `SELECT nama_lengkap, nomor_telepon FROM peserta WHERE (status_pensiun = 'Aktif' OR status_pensiun IS NULL)`
+  );
+  const [absenHariIni] = await pool.query(
+    `SELECT nama, terlambat FROM absen WHERE waktu LIKE ?`,
+    [`${tanggal}%`]
+  );
+
+  const namaSudahAbsen = new Set(absenHariIni.map((r) => r.nama));
+  const namaTerlambat = new Set(absenHariIni.filter((r) => r.terlambat === "Ya").map((r) => r.nama));
+  const belumAbsen = pesertaAktif.filter((p) => !namaSudahAbsen.has(p.nama_lengkap));
+  const terlambat = pesertaAktif.filter((p) => namaTerlambat.has(p.nama_lengkap));
+
+  async function sudahDikirim(nama, jenis) {
+    const [rows] = await pool.query(
+      `SELECT 1 FROM reminder_terkirim WHERE nama = ? AND tanggal = ? AND jenis = ?`,
+      [nama, tanggal, jenis]
+    );
+    return rows.length > 0;
+  }
+  async function tandaiTerkirim(nama, jenis) {
+    await pool.query(
+      `INSERT IGNORE INTO reminder_terkirim (id, nama, tanggal, jenis, waktu) VALUES (?, ?, ?, ?, ?)`,
+      [crypto.randomUUID(), nama, tanggal, jenis, new Date().toISOString()]
+    );
+  }
+
+  const hasil = { belumAbsen: { terkirim: 0, dilewati: 0, gagal: 0 }, terlambat: { terkirim: 0, dilewati: 0, gagal: 0 } };
+
+  for (const p of belumAbsen) {
+    if (!p.nomor_telepon) { hasil.belumAbsen.dilewati++; continue; }
+    if (await sudahDikirim(p.nama_lengkap, "belum_absen")) { hasil.belumAbsen.dilewati++; continue; }
+    const pesan = `Halo ${p.nama_lengkap}, mohon segera lakukan Absen WFH hari ini sebelum jam ${String(JAM_BATAS_TERLAMBAT.jam).padStart(2, "0")}.${String(JAM_BATAS_TERLAMBAT.menit).padStart(2, "0")} supaya tidak tercatat terlambat. Terima kasih. (Pesan otomatis)`;
+    const kirim = await kirimWA(p.nomor_telepon, pesan);
+    if (kirim.ok) {
+      hasil.belumAbsen.terkirim++;
+      await tandaiTerkirim(p.nama_lengkap, "belum_absen");
+      await catatAudit("reminder_otomatis", p.nama_lengkap, "Reminder belum absen terkirim via WA");
+    } else {
+      hasil.belumAbsen.gagal++;
+    }
+  }
+
+  for (const p of terlambat) {
+    if (!p.nomor_telepon) { hasil.terlambat.dilewati++; continue; }
+    if (await sudahDikirim(p.nama_lengkap, "terlambat")) { hasil.terlambat.dilewati++; continue; }
+    const pesan = `Halo ${p.nama_lengkap}, tercatat absen kamu hari ini masuk kategori Terlambat. Mohon diperhatikan jam absen berikutnya. Terima kasih. (Pesan otomatis)`;
+    const kirim = await kirimWA(p.nomor_telepon, pesan);
+    if (kirim.ok) {
+      hasil.terlambat.terkirim++;
+      await tandaiTerkirim(p.nama_lengkap, "terlambat");
+      await catatAudit("reminder_otomatis", p.nama_lengkap, "Reminder terlambat terkirim via WA");
+    } else {
+      hasil.terlambat.gagal++;
+    }
+  }
+
+  res.json({ ok: true, ...hasil });
 }));
 
 app.get("/api/opsi", (req, res) => {
