@@ -36,6 +36,9 @@ const pool = mysql.createPool({
   ssl: process.env.DB_SSL === "true" || process.env.VERCEL ? { rejectUnauthorized: false } : undefined,
 });
 
+// Helper: tambah 1 kolom ke tabel kalau kolom itu belum ada.
+// Dipakai supaya tiap kali ada fitur baru yang butuh kolom baru,
+// server otomatis "upgrade" struktur tabel tanpa perlu migrasi manual.
 async function tambahKolomJikaBelumAda(tabel, kolom, definisi) {
   try {
     await pool.query(`ALTER TABLE ${tabel} ADD COLUMN ${kolom} ${definisi}`);
@@ -44,6 +47,9 @@ async function tambahKolomJikaBelumAda(tabel, kolom, definisi) {
   }
 }
 
+// Membuat tabel-tabel dasar (kalau belum ada) dan menjalankan semua
+// migrasi kolom via tambahKolomJikaBelumAda(). Dipanggil sekali saat
+// server pertama kali nyala (lihat "const dbSiap = initDb();" di bawah).
 async function initDb() {
   try {
     await pool.query(`
@@ -176,6 +182,8 @@ app.use(express.static(path.join(__dirname, "public")));
 // Tunggu migrasi database selesai dulu sebelum memproses request ke /api/*.
 // Ini mencegah error "Unknown column" pas cold start Vercel, di mana request
 // pertama bisa masuk sebelum initDb() sempat selesai menambah kolom baru.
+// Tunggu migrasi database (dbSiap) selesai dulu sebelum memproses
+// request ke /api/*. Mencegah error "Unknown column" pas cold start.
 app.use("/api", async (req, res, next) => {
   try {
     await dbSiap;
@@ -186,6 +194,8 @@ app.use("/api", async (req, res, next) => {
   }
 });
 
+// Ambil jam & tanggal SEKARANG dalam zona waktu Jakarta (WIB),
+// dipakai buat nentuin "hari ini", jam buka absen, dan cek terlambat.
 function waktuJakartaSekarang() {
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
   const yyyy = now.getFullYear();
@@ -194,14 +204,21 @@ function waktuJakartaSekarang() {
   return { tanggal: `${yyyy}-${mm}-${dd}`, hari: now.getDay(), jam: now.getHours(), menit: now.getMinutes() };
 }
 
+// Cek apakah hari ini hari Jumat (dulu dipakai buat batasi absen
+// cuma hari Jumat; sekarang absen dibuka setiap hari kerja).
 function isFridayNow() {
   return waktuJakartaSekarang().hari === 5;
 }
 
+// Ubah jam:menit jadi total menit sejak jam 00:00, biar gampang dibandingkan
+// (misal: jam 08.00 = 480 menit) buat cek telat/belum buka.
 function menitSejakTengahMalam({ jam, menit }) {
   return jam * 60 + menit;
 }
 
+// GERBANG KEAMANAN: dipasang di depan endpoint yang cuma boleh diakses
+// admin. Cek kunci di ?key=... (atau header x-admin-key) harus SAMA
+// PERSIS dengan ADMIN_KEY di environment variable, kalau tidak → ditolak (401).
 function requireAdminKey(req, res, next) {
   const key = req.query.key || req.headers["x-admin-key"];
   if (!key || key !== ADMIN_KEY) {
@@ -217,6 +234,9 @@ const wrap = (fn) => (req, res) => fn(req, res).catch((err) => {
 
 // Mencatat satu baris log audit. Dipanggil "fire and forget" (tidak menghentikan
 // alur utama kalau gagal) supaya fitur audit tidak sampai bikin aksi utama gagal.
+// Simpan satu baris ke tabel audit_log (dipakai panel "Log Aktivitas
+// Admin"). "Fire and forget" - kalau gagal, cuma dicatat di console,
+// tidak sampai bikin aksi utama (misal hapus data) ikut gagal.
 async function catatAudit(aksi, targetNama, detail, olehAdmin) {
   try {
     await pool.query(
@@ -230,6 +250,9 @@ async function catatAudit(aksi, targetNama, detail, olehAdmin) {
 
 // Kirim satu pesan WhatsApp lewat Fonnte. Mengembalikan { ok, error }.
 // Nomor diformat ke standar internasional (62...) supaya diterima Fonnte.
+// Kirim satu pesan WhatsApp lewat API Fonnte. Dipakai fitur reminder
+// otomatis (endpoint /api/cron/reminder). Nomor diformat otomatis
+// ke standar internasional (62xxx) sebelum dikirim.
 async function kirimWA(nomorTujuan, pesan) {
   if (!FONNTE_TOKEN) {
     return { ok: false, error: "FONNTE_TOKEN belum diset di environment variable." };
@@ -258,6 +281,8 @@ async function kirimWA(nomorTujuan, pesan) {
 }
 
 // Admin: lihat log audit terbaru
+// [ADMIN] Ambil daftar log aktivitas terbaru, ditampilkan di panel
+// "Log Aktivitas Admin" pada dashboard.
 app.get("/api/audit-log", requireAdminKey, wrap(async (req, res) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 1000);
   const [rows] = await pool.query(
@@ -347,6 +372,8 @@ app.get("/api/cron/reminder", wrap(async (req, res) => {
   res.json({ ok: true, ...hasil });
 }));
 
+// [PUBLIK] Kasih tahu halaman absen: daftar pilihan Kegiatan, Jenis,
+// Tempat, dan jam buka/batas telat — biar frontend tidak hardcode nilai ini.
 app.get("/api/opsi", (req, res) => {
   res.json({
     kegiatan: KEGIATAN_OPTIONS,
@@ -360,6 +387,9 @@ app.get("/api/opsi", (req, res) => {
 // Endpoint publik: cek apakah nama tertentu sudah absen hari ini.
 // Dipakai halaman absen supaya orang tahu di awal (begitu pilih nama),
 // bukan baru ketahuan setelah isi seluruh form dan klik Kirim.
+// [PUBLIK] Cek apakah seseorang (berdasarkan nama) sudah absen hari ini.
+// Dipanggil begitu user pilih nama di halaman absen, SEBELUM submit,
+// supaya ketahuan dari awal kalau ternyata sudah absen.
 app.get("/api/absen/cek", wrap(async (req, res) => {
   const nama = (req.query.nama || "").trim();
   if (!nama) {
@@ -383,6 +413,8 @@ app.get("/api/absen/cek", wrap(async (req, res) => {
 
 // Endpoint publik: daftar peserta AKTIF saja (dipakai halaman absen buat isi dropdown nama).
 // Peserta yang sudah ditandai pensiun sengaja tidak dimunculkan di sini.
+// [PUBLIK] Daftar peserta AKTIF saja, dipakai buat isi dropdown nama
+// di halaman absen. Sengaja TIDAK menyertakan nomor telepon (privasi).
 app.get("/api/peserta", wrap(async (req, res) => {
   const [rows] = await pool.query(
     `SELECT id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, dibuat_pada
@@ -393,6 +425,8 @@ app.get("/api/peserta", wrap(async (req, res) => {
 }));
 
 // Admin: daftar SEMUA peserta (aktif maupun pensiun) buat dikelola di dashboard
+// [ADMIN] Daftar SEMUA peserta (termasuk yang sudah Pensiun) lengkap
+// dengan nomor telepon & status wajah — dipakai tabel "Anggota Terdaftar".
 app.get("/api/peserta/admin", requireAdminKey, wrap(async (req, res) => {
   const [rows] = await pool.query(
     `SELECT id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, nomor_telepon, dibuat_pada, status_pensiun, foto_wajah,
@@ -404,6 +438,9 @@ app.get("/api/peserta/admin", requireAdminKey, wrap(async (req, res) => {
 
 // Publik: daftar descriptor wajah peserta AKTIF, dipakai halaman absen buat pencocokan wajah di browser.
 // Sengaja TIDAK mengirim foto aslinya, cuma angka descriptor (128-D) supaya ringan & tidak bocorin foto peserta lain.
+// [PUBLIK, tapi cuma angka] Kirim descriptor wajah (128 angka per orang)
+// ke halaman absen, dipakai buat pencocokan wajah otomatis di browser.
+// TIDAK mengirim foto asli, cuma angka - jadi aman dari sisi privasi.
 app.get("/api/peserta/wajah", wrap(async (req, res) => {
   const [rows] = await pool.query(
     `SELECT id, nama_lengkap, face_descriptor FROM peserta
@@ -423,6 +460,9 @@ app.get("/api/peserta/wajah", wrap(async (req, res) => {
 }));
 
 // Admin: simpan/perbarui foto wajah referensi + descriptor (dihitung di browser admin pakai face-api.js)
+// [ADMIN] Simpan/perbarui foto wajah referensi + descriptor-nya.
+// Descriptor dihitung di browser admin pakai face-api.js, server
+// cuma nyimpen hasilnya.
 app.patch("/api/peserta/:id/wajah", requireAdminKey, wrap(async (req, res) => {
   const { foto_wajah, face_descriptor } = req.body;
   if (!Array.isArray(face_descriptor) || face_descriptor.length !== 128) {
@@ -436,12 +476,16 @@ app.patch("/api/peserta/:id/wajah", requireAdminKey, wrap(async (req, res) => {
 }));
 
 // Admin: hapus foto wajah referensi seorang peserta (misal mau daftar ulang)
+// [ADMIN] Hapus foto wajah + descriptor seorang peserta (misal mau
+// didaftarkan ulang dengan foto baru).
 app.delete("/api/peserta/:id/wajah", requireAdminKey, wrap(async (req, res) => {
   await pool.query(`UPDATE peserta SET foto_wajah = NULL, face_descriptor = NULL WHERE id = ?`, [req.params.id]);
   res.json({ ok: true });
 }));
 
 // Admin: ubah status pensiun seorang peserta (Aktif <-> Pensiun)
+// [ADMIN] Ubah status kepegawaian: Aktif <-> Pensiun. Peserta yang
+// Pensiun otomatis tidak muncul lagi di dropdown nama halaman absen.
 app.patch("/api/peserta/:id/status", requireAdminKey, wrap(async (req, res) => {
   const { status_pensiun } = req.body;
   if (!["Aktif", "Pensiun"].includes(status_pensiun)) {
@@ -453,6 +497,7 @@ app.patch("/api/peserta/:id/status", requireAdminKey, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// [ADMIN] Tambah satu peserta baru ke database.
 app.post("/api/peserta", requireAdminKey, wrap(async (req, res) => {
   const { nama_lengkap, nrp, jenis, bagian, jabatan, tempat, nomor_telepon } = req.body;
   if (!nama_lengkap || !nama_lengkap.trim()) {
@@ -475,6 +520,8 @@ app.post("/api/peserta", requireAdminKey, wrap(async (req, res) => {
 }));
 
 // Admin: edit info dasar peserta (nrp, jenis, bagian, jabatan, tempat, nomor telepon)
+// [ADMIN] Edit data dasar peserta yang SUDAH ADA (NRP, jenis, bagian,
+// jabatan, tempat, nomor telepon) — dipakai tombol "Edit" di tabel peserta.
 app.patch("/api/peserta/:id", requireAdminKey, wrap(async (req, res) => {
   const { nrp, jenis, bagian, jabatan, tempat, nomor_telepon } = req.body;
   const fields = [];
@@ -501,6 +548,7 @@ app.patch("/api/peserta/:id", requireAdminKey, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// [ADMIN] Tambah banyak peserta sekaligus, dipakai fitur "Upload Excel".
 app.post("/api/peserta/bulk", requireAdminKey, wrap(async (req, res) => {
   const { peserta } = req.body;
   if (!Array.isArray(peserta) || peserta.length === 0) {
@@ -546,6 +594,7 @@ app.post("/api/peserta/bulk", requireAdminKey, wrap(async (req, res) => {
   res.json({ ok: true, ditambah, dilewati, total: peserta.length });
 }));
 
+// [ADMIN] Hapus satu peserta permanen dari database.
 app.delete("/api/peserta/:id", requireAdminKey, wrap(async (req, res) => {
   const [[peserta]] = await pool.query(`SELECT nama_lengkap FROM peserta WHERE id = ?`, [req.params.id]);
   await pool.query(`DELETE FROM peserta WHERE id = ?`, [req.params.id]);
@@ -555,6 +604,9 @@ app.delete("/api/peserta/:id", requireAdminKey, wrap(async (req, res) => {
 
 const STATUS_KEHADIRAN_OPTIONS = ["Hadir", "Izin", "Sakit"];
 
+// [PUBLIK - INI JANTUNGNYA SISTEM] Endpoint yang dipanggil pas user
+// klik "Kirim Absensi" di halaman utama. Validasi: nama terdaftar,
+// belum absen hari ini, foto & lokasi ada, lalu hitung terlambat atau tidak.
 app.post("/api/absen", wrap(async (req, res) => {
   const {
     nama,
@@ -665,6 +717,8 @@ app.post("/api/absen", wrap(async (req, res) => {
 
 // Admin: tambah absen manual (peserta lupa/gagal absen tapi tetap masuk kerja).
 // Tidak butuh foto/lokasi/pembatasan jam, karena diinput langsung oleh admin.
+// [ADMIN] Tambah data absen manual (buat kasus lupa/gagal absen tapi
+// tetap masuk kerja). Tidak perlu foto/lokasi karena diinput admin sendiri.
 app.post("/api/absen/manual", requireAdminKey, wrap(async (req, res) => {
   const { nama, waktu, status_kehadiran, kegiatan, catatan } = req.body;
 
@@ -717,6 +771,8 @@ app.post("/api/absen/manual", requireAdminKey, wrap(async (req, res) => {
   res.json({ ok: true, id, waktu: waktuFinal });
 }));
 
+// [ADMIN] Ambil daftar riwayat absen dengan filter (nama, rentang
+// tanggal, status) + pagination — data utama tabel besar di dashboard.
 app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
   const page = Math.max(parseInt(req.query.page) || 1, 1);
   const limit = Math.min(Math.max(parseInt(req.query.limit) || 25, 1), 3000);
@@ -777,6 +833,8 @@ app.get("/api/absen", requireAdminKey, wrap(async (req, res) => {
 
 // Serve lampiran (surat izin/sakit) sebagai file biasa (bukan base64 JSON),
 // supaya bisa dibuka lewat link langsung — dipakai di kolom link Export CSV/Excel.
+// [ADMIN] Sajikan lampiran (surat izin/sakit) sebagai file biasa
+// (bukan base64 JSON), supaya bisa dibuka lewat link langsung di Excel/CSV.
 app.get("/api/absen/:id/lampiran", requireAdminKey, wrap(async (req, res) => {
   const [[row]] = await pool.query(`SELECT lampiran FROM absen WHERE id = ?`, [req.params.id]);
   if (!row || !row.lampiran) {
@@ -792,6 +850,7 @@ app.get("/api/absen/:id/lampiran", requireAdminKey, wrap(async (req, res) => {
   res.send(buffer);
 }));
 
+// [ADMIN] Hapus satu data absen permanen (misal data salah/rusak).
 app.delete("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
   const [[row]] = await pool.query(`SELECT nama, waktu FROM absen WHERE id = ?`, [req.params.id]);
   await pool.query(`DELETE FROM absen WHERE id = ?`, [req.params.id]);
@@ -800,6 +859,8 @@ app.delete("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
 }));
 
 // Admin: update sebagian data absen (nama, status kehadiran, kegiatan, catatan)
+// [ADMIN] Edit sebagian data absen yang sudah ada (nama, status
+// kehadiran, kegiatan, catatan, atau ganti foto) — tombol "Update".
 app.patch("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
   const { nama, status_kehadiran, kegiatan, catatan, foto } = req.body;
   const fields = [];
@@ -861,6 +922,8 @@ app.patch("/api/absen/:id", requireAdminKey, wrap(async (req, res) => {
 // Admin: deteksi kalau ada 2+ orang absen dari titik GPS yang nyaris sama
 // pada tanggal yang sama — indikasi kemungkinan titip absen/pinjam HP.
 // (Pengganti "geofencing kantor" yang kurang relevan untuk sistem WFH.)
+// [ADMIN] Cari kelompok orang berbeda yang absen dari titik GPS
+// nyaris sama (radius 30m) di hari yang sama — indikasi titip absen.
 app.get("/api/absen/lokasi-mencurigakan", requireAdminKey, wrap(async (req, res) => {
   const tanggal = (req.query.tanggal || waktuJakartaSekarang().tanggal).trim();
   const RADIUS_METER = 30; // dianggap "sama titik" kalau jaraknya di bawah ini
@@ -902,6 +965,8 @@ app.get("/api/absen/lokasi-mencurigakan", requireAdminKey, wrap(async (req, res)
 }));
 
 // Admin: rekap bulanan per orang — total Hadir/Izin/Sakit/Terlambat dalam satu bulan
+// [ADMIN] Hitung total Hadir/Izin/Sakit/Terlambat per orang dalam
+// satu bulan, diurutkan dari yang paling sering terlambat.
 app.get("/api/rekap-bulanan", requireAdminKey, wrap(async (req, res) => {
   const bulan = (req.query.bulan || "").trim(); // format: YYYY-MM
   if (!/^\d{4}-\d{2}$/.test(bulan)) {
@@ -933,6 +998,8 @@ app.get("/api/rekap-bulanan", requireAdminKey, wrap(async (req, res) => {
 // Admin: backup seluruh data (peserta, absen, audit_log) sebagai satu file JSON.
 // Tidak menyertakan foto/wajah/lampiran base64 (biar file tidak raksasa) —
 // kalau perlu foto, tetap ada di tiap record lewat halaman biasa.
+// [ADMIN] Download semua data (peserta, absen, log) jadi satu file
+// JSON. Foto/wajah/lampiran sengaja tidak disertakan biar filenya ringkas.
 app.get("/api/backup", requireAdminKey, wrap(async (req, res) => {
   const [peserta] = await pool.query(
     `SELECT id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, nomor_telepon, dibuat_pada, status_pensiun FROM peserta`
@@ -957,6 +1024,8 @@ app.get("/api/backup", requireAdminKey, wrap(async (req, res) => {
   res.send(JSON.stringify(backup, null, 2));
 }));
 
+// [ADMIN] Angka ringkasan buat 4 kartu statistik di paling atas dashboard
+// (Total Absen, Absen Hari Ini, Terlambat Hari Ini, Orang Terdaftar).
 app.get("/api/absen/stats", requireAdminKey, wrap(async (req, res) => {
   const { tanggal: hariIni } = waktuJakartaSekarang();
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM absen`);
@@ -988,6 +1057,8 @@ app.get("/api/absen/stats", requireAdminKey, wrap(async (req, res) => {
   });
 }));
 
+// [ADMIN] Buat file CSV dari data absen (dengan filter yang sama
+// seperti tabel), dipakai tombol "Export CSV".
 app.get("/api/absen/export", requireAdminKey, wrap(async (req, res) => {
   const search = (req.query.search || "").trim();
   const tanggal = (req.query.tanggal || "").trim();
@@ -1039,6 +1110,8 @@ app.get("/api/absen/export", requireAdminKey, wrap(async (req, res) => {
   res.send(csv);
 }));
 
+// Route khusus: kalau orang buka /admin langsung (tanpa .html),
+// tetap arahkan ke file admin.html.
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });

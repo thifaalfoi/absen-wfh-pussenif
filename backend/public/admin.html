@@ -1121,6 +1121,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
+        // Ubah format tanggal ISO (dari database) jadi format Indonesia yang gampang dibaca
     function formatTanggalJam(iso) {
       if (!iso) return '-';
       return new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
@@ -1128,6 +1129,8 @@
     
     let pesertaListTerbaru = [];
 
+        // Ambil daftar SEMUA peserta dari server (termasuk yang Pensiun),
+    // simpan di variabel, lalu render lewat filterPesertaTable()
     async function loadPeserta() {
       const empty = document.getElementById('pesertaEmpty');
       try {
@@ -1144,6 +1147,8 @@
       }
     }
 
+        // Tampilkan/saring baris tabel "Anggota Terdaftar" sesuai kata kunci
+    // pencarian (nama/NRP/bagian/jabatan/tempat/jenis)
     function filterPesertaTable() {
       const tbody = document.getElementById('pesertaBody');
       const empty = document.getElementById('pesertaEmpty');
@@ -1245,12 +1250,14 @@
   }
 }
 
+        // Tampilkan pesan sukses/gagal di bawah form "+ Tambah" peserta
     function pesertaFormStatus(msg, ok) {
       const el = document.getElementById('pesertaFormStatus');
       el.textContent = msg;
       el.className = 'status' + (ok === true ? ' ok' : ok === false ? ' err' : '');
     }
 
+        // Kirim data form "+ Tambah" ke server buat bikin peserta baru
     async function tambahPeserta() {
       const nama_lengkap = document.getElementById('pesertaNama').value.trim();
       const nrp = document.getElementById('pesertaNrp').value.trim();
@@ -1299,6 +1306,8 @@
     const confirmOkBtn = document.getElementById('confirmOkBtn');
     const confirmCancelBtn = document.getElementById('confirmCancelBtn');
 
+        // Modal konfirmasi kustom (pengganti confirm() bawaan browser yang jelek),
+    // dipakai buat semua aksi "Yakin mau hapus/ubah?" di seluruh halaman ini
     function showConfirm(opts) {
       const {
         title = 'Anda yakin?',
@@ -1357,6 +1366,7 @@
     const editPesertaSaveBtn = document.getElementById('editPesertaSaveBtn');
     let editPesertaCurrentId = null;
 
+        // Buka modal edit info dasar peserta (NRP, jenis, bagian, jabatan, tempat, No. WA)
     function bukaEditPeserta(id) {
       const p = pesertaById[id];
       if (!p) {
@@ -1375,6 +1385,7 @@
       editPesertaOverlay.classList.add('show');
     }
 
+        // Tutup modal edit peserta
     function tutupEditPeserta() {
       editPesertaOverlay.classList.remove('show');
       editPesertaCurrentId = null;
@@ -1419,6 +1430,7 @@
       }
     });
 
+        // Hapus satu peserta (dengan konfirmasi dulu)
     async function hapusPeserta(id) {
       const ok = await showConfirm({
         title: 'Hapus peserta ini?',
@@ -1435,6 +1447,7 @@
       }
     }
 
+        // Hapus satu data absen (dengan konfirmasi dulu)
     async function hapusAbsen(id) {
       const ok = await showConfirm({
         title: 'Hapus data absen ini?',
@@ -1484,6 +1497,8 @@
 
     // Bikin link WhatsApp click-to-chat: nomor diformat ke standar internasional (62...)
     // supaya bisa langsung buka WA Web/App dengan pesan sudah terisi.
+        // Bikin link "wa.me/..." dari nomor telepon + pesan, dipakai semua
+    // tombol 💬 kirim WhatsApp manual di halaman ini
     function buatLinkWA(nomor, pesan) {
       let n = (nomor || "").toString().replace(/[^0-9]/g, "");
       if (n.startsWith("0")) n = "62" + n.slice(1);
@@ -1515,6 +1530,8 @@
     const lampiranPreviewDownload = document.getElementById('lampiranPreviewDownload');
     const lampiranPreviewCloseBtn = document.getElementById('lampiranPreviewCloseBtn');
 
+        // Buka modal preview lampiran (foto/PDF surat izin-sakit) di halaman
+    // yang sama, tanpa pindah tab
     function bukaPreviewLampiran(id) {
       const row = absenRowsById[id];
       if (!row || !row.lampiran_url) {
@@ -1533,6 +1550,7 @@
       lampiranPreviewOverlay.classList.add('show');
     }
 
+        // Tutup modal preview lampiran
     function tutupPreviewLampiran() {
       lampiranPreviewOverlay.classList.remove('show');
       lampiranPreviewBody.innerHTML = '';
@@ -1542,6 +1560,8 @@
       if (e.target === lampiranPreviewOverlay) tutupPreviewLampiran();
     });
 
+        // Buka modal "Update" data absen — isi form dengan data yang sudah ada,
+    // termasuk dropdown nama peserta terbaru
     async function bukaEditAbsen(id) {
       const row = absenRowsById[id];
       if (!row) {
@@ -1574,6 +1594,7 @@
       editAbsenOverlay.classList.add('show');
     }
 
+        // Tutup modal edit absen
     function tutupEditAbsen() {
       editAbsenOverlay.classList.remove('show');
       editAbsenCurrentId = null;
@@ -1637,11 +1658,14 @@
     const tambahAbsenCancelBtn = document.getElementById('tambahAbsenCancelBtn');
     const tambahAbsenSaveBtn = document.getElementById('tambahAbsenSaveBtn');
 
+        // Ubah objek Date jadi format yang dimengerti input datetime-local HTML
     function formatDatetimeLocal(d) {
       const pad = (n) => String(n).padStart(2, '0');
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
+        // Buka modal "+ Tambah Absen" manual — isi dropdown nama & set
+    // tanggal/jam default ke sekarang
     async function bukaTambahAbsen() {
       tambahAbsenStatusEl.textContent = '';
       tambahKegiatanInput.value = '';
@@ -1664,6 +1688,7 @@
       tambahAbsenOverlay.classList.add('show');
     }
 
+        // Tutup modal tambah absen manual
     function tutupTambahAbsen() {
       tambahAbsenOverlay.classList.remove('show');
     }
@@ -1719,6 +1744,7 @@
     });
 
     const wajahStatusEl = document.getElementById('wajahStatus');
+        // Tampilkan status proses pendaftaran wajah (memuat model/mendeteksi/berhasil/gagal)
     function setWajahStatus(msg, ok) {
       wajahStatusEl.textContent = msg;
       wajahStatusEl.className = 'status' + (ok === true ? ' ok' : ok === false ? ' err' : '');
@@ -1726,6 +1752,8 @@
 
     let modelsReady = false;
     let modelsLoading = null;
+        // Download model AI face-api.js sekali (dicache), dipakai sebelum
+    // proses deteksi wajah bisa jalan
     async function pastikanModelSiap() {
       if (modelsReady) return true;
       if (!modelsLoading) {
@@ -1748,6 +1776,8 @@
     }
     pastikanModelSiap();
 
+        // Perkecil ukuran foto wajah sebelum disimpan, biar tidak makan
+    // tempat database (maks. sekitar 480px)
     function resizeGambar(imgEl, maxSize) {
       const scale = Math.min(1, maxSize / Math.max(imgEl.naturalWidth, imgEl.naturalHeight));
       const w = Math.round(imgEl.naturalWidth * scale);
@@ -1759,6 +1789,8 @@
       return canvas.toDataURL('image/jpeg', 0.85);
     }
 
+        // INTI PENDAFTARAN WAJAH: baca foto yang diupload admin, deteksi
+    // wajahnya pakai face-api.js, hitung descriptor-nya, kirim ke server
     async function daftarkanWajah(id, file, inputEl) {
       if (!file) return;
       const btn = inputEl.previousElementSibling;
@@ -1823,6 +1855,8 @@
       }
     }
 
+        // Cari nilai kolom di baris Excel yang diupload, dengan nama kolom
+    // yang fleksibel (misal "Nama" atau "nama_lengkap" dianggap sama)
     function cariNilaiKolom(row, kandidatNama) {
       for (const key of Object.keys(row)) {
         const keyBersih = key.toString().trim().toLowerCase();
@@ -1895,6 +1929,8 @@
 
     let adminNama = "";
 
+        // Proses login admin: validasi kunci ke server dulu (bukan langsung
+    // dipercaya), baru buka dashboard kalau benar
     async function unlock() {
       const keyInput = document.getElementById('adminKeyLocked').value.trim();
       const namaInput = document.getElementById('adminNamaLocked').value.trim();
@@ -1961,6 +1997,7 @@
       if (e.key === 'Enter') unlock();
     });
 
+        // Keluar dari dashboard, kembali ke layar "Akses Terbatas"
     function logoutAdmin() {
       adminKey = "";
       adminNama = "";
@@ -1973,6 +2010,7 @@
       document.getElementById('backupBtn').style.display = 'none';
     }
 
+        // Download semua data (peserta+absen+log) jadi satu file JSON
     function downloadBackup() {
       window.open('/api/backup?key=' + encodeURIComponent(adminKey), '_blank');
     }
@@ -1980,6 +2018,8 @@
     // ==========================================================
     // Rekap bulanan per orang
     // ==========================================================
+        // Ambil & tampilkan rekap Hadir/Izin/Sakit/Terlambat per orang
+    // untuk satu bulan yang dipilih
     async function loadRekapBulanan() {
       const tbody = document.getElementById('rekapBulananBody');
       const empty = document.getElementById('rekapBulananEmpty');
@@ -2018,6 +2058,8 @@
     // ==========================================================
     // Cek lokasi mencurigakan (indikasi titip absen)
     // ==========================================================
+        // Cek apakah ada 2+ orang absen dari titik GPS yang nyaris sama
+    // pada tanggal tertentu (indikasi titip absen)
     async function cekLokasiMencurigakan() {
       const tanggalInput = document.getElementById('lokasiCekTanggal');
       const result = document.getElementById('lokasiMencurigakanResult');
@@ -2041,6 +2083,7 @@
       }
     }
 
+        // Kosongkan semua filter tabel absen (nama, tanggal, status) lalu muat ulang
     function resetFilter() {
       document.getElementById('search').value = '';
       document.getElementById('tanggalAwal').value = '';
@@ -2050,6 +2093,7 @@
       loadData();
     }
 
+        // Pindah halaman tabel absen (Sebelumnya/Berikutnya)
     function changePage(delta) {
       const next = page + delta;
       if (next < 1 || next > totalPages) return;
@@ -2057,6 +2101,7 @@
       loadData();
     }
 
+        // Ambil angka buat 4 kartu statistik di paling atas dashboard
     async function loadStats() {
       try {
         const res = await fetch('/api/absen/stats?key=' + encodeURIComponent(adminKey));
@@ -2073,6 +2118,8 @@
     // ==========================================================
     let namaBelumAbsenTerbaru = [];
 
+        // Cari peserta aktif yang belum absen hari ini + yang terlambat,
+    // tampilkan sebagai daftar chip dengan tombol kirim WA per orang
     async function loadBelumAbsen() {
       const el = document.getElementById('belumAbsenList');
       const elTerlambat = document.getElementById('terlambatHariIniList');
@@ -2127,6 +2174,8 @@
       }
     }
 
+        // Salin ke clipboard pesan reminder buat SEMUA yang belum absen sekaligus
+    // (tinggal ditempel manual ke grup WA)
     function salinPesanReminder() {
       if (namaBelumAbsenTerbaru.length === 0) {
         showToast('Semua peserta aktif sudah absen hari ini — tidak ada yang perlu diingatkan.', 'ok');
@@ -2152,6 +2201,7 @@
       hapus_peserta: 'Hapus Peserta',
     };
 
+        // Ambil & tampilkan daftar log aktivitas admin terbaru
     async function loadAuditLog() {
       const tbody = document.getElementById('auditLogBody');
       const empty = document.getElementById('auditLogEmpty');
@@ -2276,6 +2326,7 @@
       }
     }
 
+        // Buka file CSV hasil export (dengan filter yang sedang aktif) di tab baru
     function exportCsv() {
       const search = document.getElementById('search').value.trim();
       const tanggalAwal = document.getElementById('tanggalAwal').value;
@@ -2294,6 +2345,7 @@
     document.getElementById('tanggalAkhir').addEventListener('change', () => { page = 1; loadData(); });
 
     const toastContainer = document.getElementById('toastContainer');
+        // Tampilkan notifikasi kecil yang muncul-hilang sendiri
     function showToast(msg, type, duration) {
       type = type || 'info';
       duration = duration || 3500;
@@ -2312,12 +2364,15 @@
       }, duration);
     }
 
+        // Amankan teks dari karakter HTML berbahaya sebelum ditampilkan
+    // (mencegah bug tampilan atau celah XSS)
     function escapeHtml(str) {
       const div = document.createElement('div');
       div.textContent = str;
       return div.innerHTML;
     }
 
+        // Buat & download file Excel (.xlsx) dari data absen yang sedang difilter
     async function exportExcel() {
       const search = document.getElementById('search').value.trim();
       const tanggalAwal = document.getElementById('tanggalAwal').value;
@@ -2363,6 +2418,8 @@
       }
     }
 
+        // Ambil data 6 hari terakhir, hitung berapa Hadir/Izin/Sakit per hari,
+    // lalu gambar sebagai bar chart bertumpuk
     async function loadWeeklyChart() {
       const canvas = document.getElementById('weeklyChart');
       const ctx = canvas.getContext('2d');
@@ -2398,6 +2455,8 @@
 
     const CHART_COLORS = { hadir: '#4CAF7D', izin: '#D4A73C', sakit: '#e2554d' };
 
+        // Gambar bar chart bertumpuk (stacked) ke elemen <canvas> pakai JS biasa
+    // (tanpa library chart eksternal)
     function drawBarChart(ctx, width, height, days) {
       ctx.clearRect(0, 0, width, height);
       const totals = days.map(d => d.hadir + d.izin + d.sakit);

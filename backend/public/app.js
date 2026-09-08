@@ -52,11 +52,13 @@ let photoQualityOk = false;
 const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const HISTORY_KEY = "absen_riwayat_lokal_v1";
 
+// Klik "Mulai Absen" di layar depan -> pindah ke form absen utama
 btnMulai.addEventListener("click", () => {
   intro.style.display = "none";
   mainApp.style.display = "block";
 });
 
+// Tampilkan teks "Hari ini: [nama hari]" di pojok kanan atas form
 function updateDayBadge() {
   const today = new Date();
   const dow = today.getDay(); // 0=Minggu ... 6=Sabtu
@@ -72,6 +74,7 @@ updateDayBadge();
 // ==========================================================
 const toastContainer = document.getElementById("toastContainer");
 
+// Tampilkan notifikasi kecil yang muncul-hilang sendiri (pojok bawah/atas layar)
 function showToast(msg, type = "info", duration = 3500) {
   const el = document.createElement("div");
   el.className = "toast " + type;
@@ -86,6 +89,7 @@ function showToast(msg, type = "info", duration = 3500) {
 // Override window.alert supaya semua alert() lama otomatis jadi toast rapi
 window.alert = (msg) => showToast(String(msg), "info", 4000);
 
+// Tampilkan pesan status di bawah tombol "Kirim Absensi" (sukses/gagal/info)
 function setStatus(msg, type) {
   statusEl.textContent = msg;
   statusEl.className = "status" + (type ? " " + type : "");
@@ -97,6 +101,7 @@ function setStatus(msg, type) {
 // ==========================================================
 // Daftar peserta & kegiatan (dari API, dengan fallback aman)
 // ==========================================================
+// Ambil daftar nama peserta AKTIF dari server, isi ke dropdown "Nama Lengkap & Pangkat"
 async function loadPeserta() {
   namaInput.innerHTML = `<option value="">Memuat daftar peserta...</option>`;
   try {
@@ -124,6 +129,8 @@ async function loadPeserta() {
 }
 loadPeserta();
 
+// Ambil daftar pilihan Kegiatan + info jam buka/batas telat dari server,
+// isi ke dropdown Kegiatan dan tampilkan banner info jam.
 async function loadOpsi() {
   try {
     const res = await fetch("/api/opsi");
@@ -157,12 +164,15 @@ let wajahDescriptors = []; // [{ id, nama_lengkap, descriptor: Float32Array }]
 let wajahDescriptorsLoaded = false;
 const FACE_MATCH_THRESHOLD = 0.55; // makin kecil makin ketat
 
+// Ubah tampilan badge status pengenalan wajah (loading/sukses/gagal/peringatan)
 function setWajahBadge(state, text) {
   wajahBadge.style.display = text ? "flex" : "none";
   wajahBadge.className = "loc-badge" + (state ? " " + state : "");
   wajahText.textContent = text || "";
 }
 
+// Download model AI pengenalan wajah (face-api.js) dari folder /models,
+// cuma sekali (dicache), dipakai buat deteksi & pencocokan wajah.
 async function ensureFaceModelsLoaded() {
   if (faceModelsReady) return true;
   if (!faceModelsLoading) {
@@ -184,6 +194,8 @@ async function ensureFaceModelsLoaded() {
   }
 }
 
+// Ambil "sidik wajah" (descriptor, berupa 128 angka) semua peserta yang
+// sudah didaftarkan admin, buat bahan pencocokan nanti.
 async function loadWajahDescriptors() {
   try {
     const res = await fetch("/api/peserta/wajah");
@@ -202,6 +214,8 @@ async function loadWajahDescriptors() {
 
 // Mulai muat model & data wajah begitu kamera dinyalakan, supaya sudah siap
 // saat pengguna mengambil foto (dijalankan paralel, tidak menghalangi kamera).
+// Mulai download model wajah + data descriptor SEJAK kamera dinyalakan,
+// biar pas foto diambil, prosesnya sudah siap (tidak nunggu lama).
 function mulaiPersiapanWajah() {
   ensureFaceModelsLoaded();
   if (!wajahDescriptorsLoaded) loadWajahDescriptors();
@@ -209,6 +223,9 @@ function mulaiPersiapanWajah() {
 
 // Coba cocokkan wajah pada foto yang baru diambil dengan daftar peserta.
 // Kalau cocok, nama di dropdown diisi otomatis (pengguna tetap bisa mengganti manual).
+// INTI FITUR FACE RECOGNITION: deteksi wajah di foto yang baru diambil,
+// bandingkan dengan semua descriptor peserta, kalau cocok -> isi otomatis
+// dropdown nama. Kalau tidak yakin/tidak terdeteksi, biarkan user pilih manual.
 async function cocokkanWajahDenganPeserta() {
   if (wajahDescriptors.length === 0) {
     setWajahBadge("", "");
@@ -293,6 +310,8 @@ const CATATAN_CONFIG = {
   },
 };
 
+// Ganti label & placeholder kolom Catatan sesuai status yang dipilih
+// ("Catatan Sakit" / "Catatan Izin" / "Catatan Tugas" kalau Hadir).
 function updateCatatanField() {
   const status = statusKehadiranInput.value;
   const cfg = CATATAN_CONFIG[status] || CATATAN_CONFIG.Hadir;
@@ -315,6 +334,8 @@ statusKehadiranInput.addEventListener("change", () => {
 // Set label/placeholder awal sesuai status default saat halaman dimuat
 updateCatatanField();
 
+// User pilih file lampiran (foto/PDF surat izin/sakit) -> baca jadi
+// data URL (base64) di memori, siap dikirim nanti pas submit.
 lampiranFile.addEventListener("change", () => {
   const file = lampiranFile.files[0];
   if (!file) {
@@ -344,6 +365,8 @@ lampiranFile.addEventListener("change", () => {
 // ==========================================================
 // Kamera
 // ==========================================================
+// Nyalakan kamera depan HP/laptop, sekaligus mulai minta izin lokasi
+// dan mulai siapkan model pengenalan wajah di background.
 btnCamera.addEventListener("click", async () => {
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -363,12 +386,14 @@ btnCamera.addEventListener("click", async () => {
   }
 });
 
+// Ubah tampilan badge status lokasi (mendeteksi/berhasil/gagal)
 function setLocBadge(state, text) {
   locBadge.className = "loc-badge" + (state ? " " + state : "");
   locText.textContent = text;
   btnRetryLoc.style.display = state === "err" ? "inline-block" : "none";
 }
 
+// Minta izin GPS ke browser, simpan koordinat + akurasinya kalau berhasil
 function requestLocation() {
   if (!navigator.geolocation) {
     setLocBadge("err", "Perangkat tidak mendukung geolokasi.");
@@ -402,11 +427,14 @@ btnRetryLoc.addEventListener("click", requestLocation);
 // ==========================================================
 // FITUR 8: Validasi kualitas foto sederhana (deteksi kosong / gelap)
 // ==========================================================
+// Ubah tampilan badge kualitas foto (baik/gelap/terang/kosong)
 function setQualityBadge(state, text) {
   qualityBadge.className = "quality-badge " + state;
   qualityText.textContent = text;
 }
 
+// Cek foto yang baru diambil: apakah terlalu gelap, terlalu terang,
+// atau kosong (kamera ketutup) — dengan menghitung rata-rata kecerahan pixel.
 function analyzePhotoQuality(ctx, width, height) {
   const sampleW = Math.min(width, 160);
   const sampleH = Math.min(height, 120);
@@ -443,6 +471,8 @@ function analyzePhotoQuality(ctx, width, height) {
   return { ok: true, brightness: mean, variance, reason: "ok" };
 }
 
+// Ambil screenshot dari video kamera yang sedang jalan jadi satu foto,
+// cek kualitasnya, lalu coba cocokkan wajahnya kalau kualitasnya bagus.
 btnCapture.addEventListener("click", () => {
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
@@ -484,6 +514,7 @@ btnCapture.addEventListener("click", () => {
   }
 });
 
+// Buang foto yang sudah diambil, nyalakan ulang kamera buat difoto lagi
 btnRetake.addEventListener("click", () => {
   capturedDataUrl = null;
   preview.style.display = "none";
@@ -502,6 +533,9 @@ btnRetake.addEventListener("click", () => {
 // ==========================================================
 let sudahAbsenHariIni = false;
 
+// Cek semua syarat sudah lengkap (foto oke, lokasi ada, nama dipilih,
+// catatan wajib terisi kalau Izin/Sakit, belum absen hari ini) —
+// baru tombol "Kirim Absensi" bisa diklik.
 function checkFormReady() {
   const status = statusKehadiranInput.value;
   const perluIzinSakit = status === "Izin" || status === "Sakit";
@@ -526,6 +560,8 @@ catatanInput.addEventListener("input", checkFormReady);
 // Cek "sudah absen hari ini" begitu nama dipilih, supaya
 // orang tahu di awal (bukan baru ketahuan setelah klik Kirim).
 // ==========================================================
+// Begitu nama dipilih, langsung tanya ke server: orang ini sudah
+// absen hari ini belum? Kalau sudah, kunci tombol submit dari awal.
 async function cekSudahAbsen() {
   const nama = namaInput.value;
   sudahAbsenHariIni = false;
@@ -556,6 +592,8 @@ namaInput.addEventListener("change", cekSudahAbsen);
 // ==========================================================
 // Tombol Reset — kembalikan form ke kondisi awal tanpa reload halaman
 // ==========================================================
+// Tombol "Reset": kosongkan semua isian form tanpa perlu reload halaman
+// (kamera yang sudah nyala tetap nyala, cuma data form yang dibersihkan)
 btnReset.addEventListener("click", () => {
   namaInput.value = "";
   kegiatanInput.value = "";
@@ -591,6 +629,8 @@ btnReset.addEventListener("click", () => {
 // ==========================================================
 // FITUR 7: Riwayat Lokal (localStorage) — per perangkat
 // ==========================================================
+// Ambil riwayat absen yang tersimpan di localStorage perangkat ini
+// (bukan dari server — makanya disebut "riwayat lokal")
 function getLocalHistory() {
   try {
     return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
@@ -599,12 +639,14 @@ function getLocalHistory() {
   }
 }
 
+// Simpan satu entri absen baru ke localStorage perangkat ini
 function saveLocalHistory(entry) {
   const list = getLocalHistory();
   list.unshift(entry);
   localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 50)));
 }
 
+// Tampilkan daftar riwayat absen lokal ke layar (modal "Riwayat Absen Saya")
 function renderHistory() {
   const list = getLocalHistory();
   if (list.length === 0) {
@@ -629,10 +671,12 @@ function renderHistory() {
     .join("");
 }
 
+// Buka modal riwayat absen
 function openRiwayat() {
   renderHistory();
   riwayatOverlay.classList.add("show");
 }
+// Tutup modal riwayat absen
 function closeRiwayat() {
   riwayatOverlay.classList.remove("show");
 }
