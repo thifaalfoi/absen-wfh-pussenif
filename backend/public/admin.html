@@ -1120,7 +1120,7 @@
             : `<span class="badge-status badge-wajah-kosong">Belum ada</span>`;
 
           const teleponCell = p.nomor_telepon
-            ? `<a href="${buatLinkWA(p.nomor_telepon, `Halo ${p.nama_lengkap}, ini pengingat dari admin Absen WFH Pussenif.`)}" target="_blank" style="color:var(--green); text-decoration:none; font-size:12.5px;">💬 ${escapeHtml(p.nomor_telepon)}</a>`
+            ? `<a href="${buatLinkWA(p.nomor_telepon, `Assalamu'alaikum Wr. Wb. / Selamat pagi,\n\nMohon izin mengingatkan, Bapak/Ibu ${p.nama_lengkap} agar berkenan melaksanakan Absen WFH pada hari ini.\n\nDemikian disampaikan, atas perhatian dan kerja samanya kami ucapkan terima kasih.\n\nHormat kami,\nAdmin Absen WFH Pussenif TNI AD`)}" target="_blank" style="color:var(--green); text-decoration:none; font-size:12.5px;">💬 ${escapeHtml(p.nomor_telepon)}</a>`
             : '<span style="color:var(--muted); font-size:12.5px;">-</span>';
 
           tr.innerHTML = `
@@ -1933,7 +1933,7 @@
         if (belum.length === 0) {
           el.innerHTML = '<span style="color:var(--green); font-size:13px;">✓ Semua peserta aktif sudah absen hari ini.</span>';
         } else {
-          const pesanBelum = (nama) => `Halo ${nama}, mohon segera lakukan Absen WFH hari ini. Terima kasih.`;
+          const pesanBelum = (nama) => `Assalamu'alaikum Wr. Wb. / Selamat pagi,\n\nMohon izin mengingatkan, Bapak/Ibu ${nama} agar berkenan segera melaksanakan Absen WFH pada hari ini.\n\nDemikian disampaikan, atas perhatian dan kerja samanya kami ucapkan terima kasih.\n\nHormat kami,\nAdmin Absen WFH Pussenif TNI AD`;
           el.innerHTML = belum.map(p => renderChip(p.nama_lengkap, p.nomor_telepon, 'belum-absen-chip', pesanBelum(p.nama_lengkap))).join('');
         }
 
@@ -1942,7 +1942,7 @@
           if (terlambat.length === 0) {
             elTerlambat.innerHTML = '<span style="color:var(--green); font-size:13px;">✓ Tidak ada yang terlambat hari ini.</span>';
           } else {
-            const pesanTerlambat = (nama) => `Halo ${nama}, tercatat absen kamu hari ini masuk kategori Terlambat. Mohon diperhatikan jam absen berikutnya. Terima kasih.`;
+            const pesanTerlambat = (nama) => `Assalamu'alaikum Wr. Wb. / Selamat pagi,\n\nMohon izin menyampaikan, tercatat Absen WFH Bapak/Ibu ${nama} pada hari ini berstatus Terlambat.\n\nMohon dapat lebih memperhatikan ketepatan waktu pada pelaksanaan absen berikutnya.\n\nDemikian disampaikan, atas perhatian dan kerja samanya kami ucapkan terima kasih.\n\nHormat kami,\nAdmin Absen WFH Pussenif TNI AD`;
             elTerlambat.innerHTML = terlambat.map(r => {
               const p = pesertaAktifSemua.find(pp => pp.nama_lengkap === r.nama);
               return renderChip(r.nama, p ? p.nomor_telepon : null, 'terlambat-chip', pesanTerlambat(r.nama));
@@ -1962,7 +1962,7 @@
       }
       const tanggalHariIni = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
       const daftarNama = namaBelumAbsenTerbaru.map((n, i) => `${i + 1}. ${n}`).join('\n');
-      const pesan = `Halo, mohon segera lakukan Absen WFH hari ini (${tanggalHariIni}) bagi yang belum:\n\n${daftarNama}\n\nTerima kasih.`;
+      const pesan = `Assalamu'alaikum Wr. Wb. / Selamat pagi,\n\nMohon izin mengingatkan kepada rekan-rekan berikut agar berkenan segera melaksanakan Absen WFH pada hari ini, ${tanggalHariIni}:\n\n${daftarNama}\n\nDemikian disampaikan, atas perhatian dan kerja samanya kami ucapkan terima kasih.\n\nHormat kami,\nAdmin Absen WFH Pussenif TNI AD`;
 
       navigator.clipboard.writeText(pesan)
         .then(() => showToast('Pesan reminder disalin, tinggal paste ke grup WA/email.', 'ok'))

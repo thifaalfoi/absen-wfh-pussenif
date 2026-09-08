@@ -314,7 +314,7 @@ app.get("/api/cron/reminder", wrap(async (req, res) => {
   for (const p of belumAbsen) {
     if (!p.nomor_telepon) { hasil.belumAbsen.dilewati++; continue; }
     if (await sudahDikirim(p.nama_lengkap, "belum_absen")) { hasil.belumAbsen.dilewati++; continue; }
-    const pesan = `Halo ${p.nama_lengkap}, mohon segera lakukan Absen WFH hari ini sebelum jam ${String(JAM_BATAS_TERLAMBAT.jam).padStart(2, "0")}.${String(JAM_BATAS_TERLAMBAT.menit).padStart(2, "0")} supaya tidak tercatat terlambat. Terima kasih. (Pesan otomatis)`;
+    const pesan = `Assalamu'alaikum Wr. Wb. / Selamat pagi,\n\nMohon izin mengingatkan, Bapak/Ibu ${p.nama_lengkap} agar berkenan segera melaksanakan Absen WFH sebelum jam ${String(JAM_BATAS_TERLAMBAT.jam).padStart(2, "0")}.${String(JAM_BATAS_TERLAMBAT.menit).padStart(2, "0")} agar tidak tercatat terlambat.\n\nDemikian disampaikan, atas perhatian dan kerja samanya kami ucapkan terima kasih.\n\nHormat kami,\nAdmin Absen WFH Pussenif TNI AD\n(Pesan ini dikirim otomatis oleh sistem)`;
     const kirim = await kirimWA(p.nomor_telepon, pesan);
     if (kirim.ok) {
       hasil.belumAbsen.terkirim++;
@@ -328,7 +328,7 @@ app.get("/api/cron/reminder", wrap(async (req, res) => {
   for (const p of terlambat) {
     if (!p.nomor_telepon) { hasil.terlambat.dilewati++; continue; }
     if (await sudahDikirim(p.nama_lengkap, "terlambat")) { hasil.terlambat.dilewati++; continue; }
-    const pesan = `Halo ${p.nama_lengkap}, tercatat absen kamu hari ini masuk kategori Terlambat. Mohon diperhatikan jam absen berikutnya. Terima kasih. (Pesan otomatis)`;
+    const pesan = `Assalamu'alaikum Wr. Wb. / Selamat pagi,\n\nMohon izin menyampaikan, tercatat Absen WFH Bapak/Ibu ${p.nama_lengkap} pada hari ini berstatus Terlambat.\n\nMohon dapat lebih memperhatikan ketepatan waktu pada pelaksanaan absen berikutnya.\n\nDemikian disampaikan, atas perhatian dan kerja samanya kami ucapkan terima kasih.\n\nHormat kami,\nAdmin Absen WFH Pussenif TNI AD\n(Pesan ini dikirim otomatis oleh sistem)`;
     const kirim = await kirimWA(p.nomor_telepon, pesan);
     if (kirim.ok) {
       hasil.terlambat.terkirim++;
