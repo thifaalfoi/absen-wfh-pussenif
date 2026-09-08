@@ -89,6 +89,7 @@ async function initDb() {
     await tambahKolomJikaBelumAda("peserta", "status_pensiun", "VARCHAR(20) DEFAULT 'Aktif'"); // Aktif / Pensiun
     await tambahKolomJikaBelumAda("peserta", "face_descriptor", "LONGTEXT"); // 128-D face descriptor (JSON array) utk pengenalan wajah
     await tambahKolomJikaBelumAda("peserta", "foto_wajah", "LONGTEXT"); // foto referensi wajah (base64), utk preview di admin
+    await tambahKolomJikaBelumAda("peserta", "nomor_telepon", "VARCHAR(30)"); // nomor WA, dipakai fitur reminder
     await tambahKolomJikaBelumAda("absen", "terlambat", "VARCHAR(5)");
     await tambahKolomJikaBelumAda("absen", "status_kehadiran", "VARCHAR(20) DEFAULT 'Hadir'"); // Hadir / Izin / Sakit
     await tambahKolomJikaBelumAda("absen", "catatan", "TEXT"); // catatan tugas (Hadir) / catatan izin / catatan sakit
@@ -248,7 +249,7 @@ app.get("/api/peserta", wrap(async (req, res) => {
 // Admin: daftar SEMUA peserta (aktif maupun pensiun) buat dikelola di dashboard
 app.get("/api/peserta/admin", requireAdminKey, wrap(async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, dibuat_pada, status_pensiun, foto_wajah,
+    `SELECT id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, nomor_telepon, dibuat_pada, status_pensiun, foto_wajah,
             (face_descriptor IS NOT NULL AND face_descriptor <> '') AS punya_wajah
      FROM peserta ORDER BY status_pensiun ASC, nama_lengkap ASC`
   );
@@ -307,16 +308,16 @@ app.patch("/api/peserta/:id/status", requireAdminKey, wrap(async (req, res) => {
 }));
 
 app.post("/api/peserta", requireAdminKey, wrap(async (req, res) => {
-  const { nama_lengkap, nrp, jenis, bagian, jabatan, tempat } = req.body;
+  const { nama_lengkap, nrp, jenis, bagian, jabatan, tempat, nomor_telepon } = req.body;
   if (!nama_lengkap || !nama_lengkap.trim()) {
     return res.status(400).json({ error: "Nama lengkap wajib diisi." });
   }
   try {
     const id = crypto.randomUUID();
     await pool.query(
-      `INSERT INTO peserta (id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, dibuat_pada)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, nama_lengkap.trim(), nrp || null, jenis || null, bagian || null, jabatan || null, tempat || null, new Date().toISOString()]
+      `INSERT INTO peserta (id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, nomor_telepon, dibuat_pada)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, nama_lengkap.trim(), nrp || null, jenis || null, bagian || null, jabatan || null, tempat || null, (nomor_telepon || "").trim() || null, new Date().toISOString()]
     );
     res.json({ ok: true, id });
   } catch (err) {
@@ -325,6 +326,33 @@ app.post("/api/peserta", requireAdminKey, wrap(async (req, res) => {
     }
     throw err;
   }
+}));
+
+// Admin: edit info dasar peserta (nrp, jenis, bagian, jabatan, tempat, nomor telepon)
+app.patch("/api/peserta/:id", requireAdminKey, wrap(async (req, res) => {
+  const { nrp, jenis, bagian, jabatan, tempat, nomor_telepon } = req.body;
+  const fields = [];
+  const params = [];
+
+  if (nrp !== undefined) { fields.push("nrp = ?"); params.push(nrp || null); }
+  if (jenis !== undefined) { fields.push("jenis = ?"); params.push(jenis || null); }
+  if (bagian !== undefined) { fields.push("bagian = ?"); params.push(bagian || null); }
+  if (jabatan !== undefined) { fields.push("jabatan = ?"); params.push(jabatan || null); }
+  if (tempat !== undefined) { fields.push("tempat = ?"); params.push(tempat || null); }
+  if (nomor_telepon !== undefined) { fields.push("nomor_telepon = ?"); params.push((nomor_telepon || "").toString().trim() || null); }
+
+  if (fields.length === 0) {
+    return res.status(400).json({ error: "Tidak ada data yang diubah." });
+  }
+
+  const [[peserta]] = await pool.query(`SELECT nama_lengkap FROM peserta WHERE id = ?`, [req.params.id]);
+  params.push(req.params.id);
+  const [result] = await pool.query(`UPDATE peserta SET ${fields.join(", ")} WHERE id = ?`, params);
+  if (result.affectedRows === 0) {
+    return res.status(404).json({ error: "Peserta tidak ditemukan." });
+  }
+  catatAudit("edit_peserta", peserta ? peserta.nama_lengkap : null, "Data peserta diperbarui");
+  res.json({ ok: true });
 }));
 
 app.post("/api/peserta/bulk", requireAdminKey, wrap(async (req, res) => {
@@ -345,8 +373,8 @@ app.post("/api/peserta/bulk", requireAdminKey, wrap(async (req, res) => {
     }
     try {
       await pool.query(
-        `INSERT INTO peserta (id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, dibuat_pada)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO peserta (id, nama_lengkap, nrp, jenis, bagian, jabatan, tempat, nomor_telepon, dibuat_pada)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           crypto.randomUUID(),
           nama,
@@ -355,6 +383,7 @@ app.post("/api/peserta/bulk", requireAdminKey, wrap(async (req, res) => {
           (p.bagian || "").toString().trim() || null,
           (p.jabatan || "").toString().trim() || null,
           (p.tempat || "").toString().trim() || null,
+          (p.nomor_telepon || p.telepon || p.wa || "").toString().trim() || null,
           sekarang,
         ]
       );

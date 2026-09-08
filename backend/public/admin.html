@@ -270,6 +270,19 @@
       font-weight: 600;
       padding: 5px 12px;
       border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .terlambat-chip {
+      background: rgba(212, 167, 60, 0.12);
+      border: 1px solid rgba(212, 167, 60, 0.35);
+      color: var(--gold);
+      font-size: 12.5px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
     }
     .chart-legend {
       display: flex;
@@ -820,6 +833,53 @@
     </div>
   </div>
 
+  <!-- Modal edit info peserta (termasuk nomor WA) -->
+  <div id="editPesertaOverlay" class="confirm-overlay">
+    <div class="confirm-box" style="max-width:420px">
+      <div class="confirm-title" style="margin-bottom:16px" id="editPesertaTitle">Edit Peserta</div>
+
+      <div class="edit-field">
+        <label for="editPesertaNrp">NRP</label>
+        <input type="text" id="editPesertaNrp" />
+      </div>
+      <div class="edit-field">
+        <label for="editPesertaJenis">Jenis</label>
+        <select id="editPesertaJenis">
+          <option value="">-</option>
+          <option value="TNI">TNI</option>
+          <option value="PNS">PNS</option>
+        </select>
+      </div>
+      <div class="edit-field">
+        <label for="editPesertaBagian">Bagian</label>
+        <input type="text" id="editPesertaBagian" />
+      </div>
+      <div class="edit-field">
+        <label for="editPesertaJabatan">Jabatan</label>
+        <input type="text" id="editPesertaJabatan" />
+      </div>
+      <div class="edit-field">
+        <label for="editPesertaTempat">Tempat</label>
+        <select id="editPesertaTempat">
+          <option value="">-</option>
+          <option value="Pussenif">Pussenif</option>
+          <option value="Pusdikif">Pusdikif</option>
+        </select>
+      </div>
+      <div class="edit-field">
+        <label for="editPesertaTelepon">No. WA</label>
+        <input type="text" id="editPesertaTelepon" placeholder="08xx atau 62xx" />
+      </div>
+
+      <div class="status" id="editPesertaStatus" style="margin-bottom:10px"></div>
+
+      <div class="confirm-actions">
+        <button type="button" class="ghost" id="editPesertaCancelBtn">Batal</button>
+        <button type="button" id="editPesertaSaveBtn" style="background: var(--gold); color:#1a1a1a; font-weight:600;">Simpan</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toastContainer"></div>
 
   <header>
@@ -871,6 +931,14 @@
           <span style="color:var(--muted); font-size:13px;">Memuat...</span>
         </div>
         <div style="font-size:11px; color:var(--muted); margin-top:10px;">Belum ada nomor WA/email tersimpan di sistem, jadi pesan ini perlu ditempel &amp; dikirim manual ke grup.</div>
+      </div>
+
+      <div class="panel" id="terlambatPanel" style="padding:18px 22px; margin-bottom:22px;">
+        <div class="chart-title" style="margin-bottom:10px;">Terlambat Hari Ini</div>
+        <div id="terlambatHariIniList" style="display:flex; flex-wrap:wrap; gap:8px;">
+          <span style="color:var(--muted); font-size:13px;">Memuat...</span>
+        </div>
+        <div style="font-size:11px; color:var(--muted); margin-top:10px;">Klik ikon 💬 di samping nama untuk kirim pengingat WhatsApp langsung ke orang tersebut.</div>
       </div>
 
       <div class="chart-panel">
@@ -959,6 +1027,7 @@
             <option value="Pussenif">Pussenif</option>
             <option value="Pusdikif">Pusdikif</option>
           </select>
+          <input type="text" id="pesertaTelepon" placeholder="No. WA (08xx...)..." style="width:150px" />
           <button onclick="tambahPeserta()">+ Tambah</button>
         </div>
         <div class="status" id="pesertaFormStatus" style="padding:0 18px 12px"></div>
@@ -973,10 +1042,11 @@
               <th>Bagian</th>
               <th>Jabatan</th>
               <th>Tempat</th>
+              <th>No. WA</th>
               <th>Status Pegawai</th>
               <th>Terdaftar</th>
               <th>Wajah</th>
-              <th style="width:70px">Aksi</th>
+              <th style="width:100px">Aksi</th>
             </tr>
           </thead>
           <tbody id="pesertaBody"></tbody>
@@ -1033,6 +1103,7 @@
         empty.style.display = 'none';
         for (const p of data) {
           const tr = document.createElement('tr');
+          pesertaById[p.id] = p;
           const isPensiun = p.status_pensiun === 'Pensiun' || p.status_pensiun === 1 || p.status_pensiun === true;
 
           const toggleStatusPensiun = `
@@ -1048,6 +1119,10 @@
                <span class="badge-status badge-wajah-ok">✓ Terdaftar</span>`
             : `<span class="badge-status badge-wajah-kosong">Belum ada</span>`;
 
+          const teleponCell = p.nomor_telepon
+            ? `<a href="${buatLinkWA(p.nomor_telepon, `Halo ${p.nama_lengkap}, ini pengingat dari admin Absen WFH Pussenif.`)}" target="_blank" style="color:var(--green); text-decoration:none; font-size:12.5px;">💬 ${escapeHtml(p.nomor_telepon)}</a>`
+            : '<span style="color:var(--muted); font-size:12.5px;">-</span>';
+
           tr.innerHTML = `
             <td>${p.nama_lengkap}</td>
             <td>${p.nrp || '-'}</td>
@@ -1055,6 +1130,7 @@
             <td>${p.bagian || '-'}</td>
             <td>${p.jabatan || '-'}</td>
             <td>${p.tempat || '-'}</td>
+            <td>${teleponCell}</td>
             <td>
               <div class="pensiun-cell">
                 ${toggleStatusPensiun}
@@ -1068,7 +1144,12 @@
                 <input type="file" accept="image/*" class="wajah-file-input" id="wajahFile_${p.id}" onchange="daftarkanWajah('${p.id}', this.files[0], this)" />
               </div>
             </td>
-            <td><button class="btn-table-delete" onclick="hapusPeserta('${p.id}')">Hapus</button></td>
+            <td>
+              <div class="aksi-cell">
+                <button class="btn-table-action" onclick="bukaEditPeserta('${p.id}')">Edit</button>
+                <button class="btn-table-delete" onclick="hapusPeserta('${p.id}')">Hapus</button>
+              </div>
+            </td>
           `;
           tbody.appendChild(tr);
         }
@@ -1122,6 +1203,7 @@
       const bagian = document.getElementById('pesertaBagian').value.trim();
       const jabatan = document.getElementById('pesertaJabatan').value.trim();
       const tempat = document.getElementById('pesertaTempat').value;
+      const nomor_telepon = document.getElementById('pesertaTelepon').value.trim();
 
       if (!nama_lengkap) {
         pesertaFormStatus('Nama wajib diisi.', false);
@@ -1132,7 +1214,7 @@
         const res = await fetch('/api/peserta?key=' + encodeURIComponent(adminKey), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nama_lengkap, nrp, jenis, bagian, jabatan, tempat }),
+          body: JSON.stringify({ nama_lengkap, nrp, jenis, bagian, jabatan, tempat, nomor_telepon }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -1145,6 +1227,7 @@
         document.getElementById('pesertaBagian').value = '';
         document.getElementById('pesertaJabatan').value = '';
         document.getElementById('pesertaTempat').value = '';
+        document.getElementById('pesertaTelepon').value = '';
         pesertaFormStatus('Peserta "' + nama_lengkap + '" berhasil ditambahkan.', true);
         loadPeserta();
         loadStats();
@@ -1202,6 +1285,84 @@
         document.addEventListener('keydown', onKeydown);
       });
     }
+
+    // ==========================================================
+    // Edit info peserta (NRP, jenis, bagian, jabatan, tempat, No. WA)
+    // ==========================================================
+    const editPesertaOverlay = document.getElementById('editPesertaOverlay');
+    const editPesertaTitle = document.getElementById('editPesertaTitle');
+    const editPesertaNrp = document.getElementById('editPesertaNrp');
+    const editPesertaJenis = document.getElementById('editPesertaJenis');
+    const editPesertaBagian = document.getElementById('editPesertaBagian');
+    const editPesertaJabatan = document.getElementById('editPesertaJabatan');
+    const editPesertaTempat = document.getElementById('editPesertaTempat');
+    const editPesertaTelepon = document.getElementById('editPesertaTelepon');
+    const editPesertaStatusEl = document.getElementById('editPesertaStatus');
+    const editPesertaCancelBtn = document.getElementById('editPesertaCancelBtn');
+    const editPesertaSaveBtn = document.getElementById('editPesertaSaveBtn');
+    let editPesertaCurrentId = null;
+
+    function bukaEditPeserta(id) {
+      const p = pesertaById[id];
+      if (!p) {
+        showToast('Data peserta tidak ditemukan, coba muat ulang.', 'err');
+        return;
+      }
+      editPesertaCurrentId = id;
+      editPesertaTitle.textContent = 'Edit Peserta — ' + p.nama_lengkap;
+      editPesertaNrp.value = p.nrp || '';
+      editPesertaJenis.value = p.jenis || '';
+      editPesertaBagian.value = p.bagian || '';
+      editPesertaJabatan.value = p.jabatan || '';
+      editPesertaTempat.value = p.tempat || '';
+      editPesertaTelepon.value = p.nomor_telepon || '';
+      editPesertaStatusEl.textContent = '';
+      editPesertaOverlay.classList.add('show');
+    }
+
+    function tutupEditPeserta() {
+      editPesertaOverlay.classList.remove('show');
+      editPesertaCurrentId = null;
+    }
+    editPesertaCancelBtn.addEventListener('click', tutupEditPeserta);
+    editPesertaOverlay.addEventListener('click', (e) => {
+      if (e.target === editPesertaOverlay) tutupEditPeserta();
+    });
+
+    editPesertaSaveBtn.addEventListener('click', async () => {
+      if (!editPesertaCurrentId) return;
+      editPesertaSaveBtn.disabled = true;
+      editPesertaSaveBtn.textContent = 'Menyimpan...';
+      editPesertaStatusEl.textContent = '';
+      try {
+        const res = await fetch(`/api/peserta/${editPesertaCurrentId}?key=` + encodeURIComponent(adminKey), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nrp: editPesertaNrp.value.trim(),
+            jenis: editPesertaJenis.value,
+            bagian: editPesertaBagian.value.trim(),
+            jabatan: editPesertaJabatan.value.trim(),
+            tempat: editPesertaTempat.value,
+            nomor_telepon: editPesertaTelepon.value.trim(),
+          }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Gagal menyimpan ke server');
+        }
+        showToast('Data peserta berhasil diperbarui.', 'ok');
+        tutupEditPeserta();
+        loadPeserta();
+        loadAuditLog();
+      } catch (e) {
+        editPesertaStatusEl.textContent = e.message;
+        editPesertaStatusEl.className = 'status err';
+      } finally {
+        editPesertaSaveBtn.disabled = false;
+        editPesertaSaveBtn.textContent = 'Simpan';
+      }
+    });
 
     async function hapusPeserta(id) {
       const ok = await showConfirm({
@@ -1264,6 +1425,16 @@
     // Menyimpan data baris absen yang sedang tampil, dikunci per ID,
     // supaya tombol Update tidak perlu menyisipkan seluruh data (termasuk foto) ke HTML
     let absenRowsById = {};
+    let pesertaById = {};
+
+    // Bikin link WhatsApp click-to-chat: nomor diformat ke standar internasional (62...)
+    // supaya bisa langsung buka WA Web/App dengan pesan sudah terisi.
+    function buatLinkWA(nomor, pesan) {
+      let n = (nomor || "").toString().replace(/[^0-9]/g, "");
+      if (n.startsWith("0")) n = "62" + n.slice(1);
+      else if (!n.startsWith("62")) n = "62" + n;
+      return `https://wa.me/${n}?text=${encodeURIComponent(pesan || "")}`;
+    }
 
     editFotoFile.addEventListener('change', () => {
       const file = editFotoFile.files[0];
@@ -1732,29 +1903,55 @@
 
     async function loadBelumAbsen() {
       const el = document.getElementById('belumAbsenList');
+      const elTerlambat = document.getElementById('terlambatHariIniList');
       el.innerHTML = '<span style="color:var(--muted); font-size:13px;">Memuat...</span>';
+      if (elTerlambat) elTerlambat.innerHTML = '<span style="color:var(--muted); font-size:13px;">Memuat...</span>';
       try {
         const today = new Date();
         const tanggalHariIni = today.toISOString().slice(0, 10);
 
         const [pesertaRes, absenRes] = await Promise.all([
-          fetch('/api/peserta'),
+          fetch('/api/peserta/admin?key=' + encodeURIComponent(adminKey)),
           fetch('/api/absen?' + new URLSearchParams({ key: adminKey, tanggal: tanggalHariIni, limit: 1000, page: 1 }).toString()),
         ]);
-        const pesertaAktif = await pesertaRes.json();
+        const responseJson = await pesertaRes.json();
+        const pesertaAktifSemua = Array.isArray(responseJson) ? responseJson : (responseJson.data || responseJson.peserta || []);
+        const pesertaAktif = pesertaAktifSemua.filter(p => (p.status_pensiun || 'Aktif') === 'Aktif');
         const { data: absenHariIni } = await absenRes.json();
 
         const namaSudahAbsen = new Set((absenHariIni || []).map(r => r.nama));
         const belum = pesertaAktif.filter(p => !namaSudahAbsen.has(p.nama_lengkap));
         namaBelumAbsenTerbaru = belum.map(p => p.nama_lengkap);
 
+        const renderChip = (nama, nomorTelepon, warnaClass, pesan) => {
+          const waBtn = nomorTelepon
+            ? `<a href="${buatLinkWA(nomorTelepon, pesan)}" target="_blank" title="Kirim WA ke ${escapeHtml(nama)}" style="text-decoration:none; margin-left:6px;">💬</a>`
+            : `<span title="Belum ada nomor WA" style="opacity:0.35; margin-left:6px;">💬</span>`;
+          return `<span class="${warnaClass}">${escapeHtml(nama)}${waBtn}</span>`;
+        };
+
         if (belum.length === 0) {
           el.innerHTML = '<span style="color:var(--green); font-size:13px;">✓ Semua peserta aktif sudah absen hari ini.</span>';
-          return;
+        } else {
+          const pesanBelum = (nama) => `Halo ${nama}, mohon segera lakukan Absen WFH hari ini. Terima kasih.`;
+          el.innerHTML = belum.map(p => renderChip(p.nama_lengkap, p.nomor_telepon, 'belum-absen-chip', pesanBelum(p.nama_lengkap))).join('');
         }
-        el.innerHTML = belum.map(p => `<span class="belum-absen-chip">${escapeHtml(p.nama_lengkap)}</span>`).join('');
+
+        if (elTerlambat) {
+          const terlambat = (absenHariIni || []).filter(r => r.terlambat === 'Ya');
+          if (terlambat.length === 0) {
+            elTerlambat.innerHTML = '<span style="color:var(--green); font-size:13px;">✓ Tidak ada yang terlambat hari ini.</span>';
+          } else {
+            const pesanTerlambat = (nama) => `Halo ${nama}, tercatat absen kamu hari ini masuk kategori Terlambat. Mohon diperhatikan jam absen berikutnya. Terima kasih.`;
+            elTerlambat.innerHTML = terlambat.map(r => {
+              const p = pesertaAktifSemua.find(pp => pp.nama_lengkap === r.nama);
+              return renderChip(r.nama, p ? p.nomor_telepon : null, 'terlambat-chip', pesanTerlambat(r.nama));
+            }).join('');
+          }
+        }
       } catch (e) {
         el.innerHTML = '<span style="color:var(--muted); font-size:13px;">Gagal memuat daftar.</span>';
+        if (elTerlambat) elTerlambat.innerHTML = '<span style="color:var(--muted); font-size:13px;">Gagal memuat daftar.</span>';
       }
     }
 
