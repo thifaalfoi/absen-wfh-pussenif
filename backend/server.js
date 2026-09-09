@@ -101,6 +101,16 @@ async function initDb() {
       )
     `);
 
+    // Lacak percobaan login admin yang gagal per alamat IP, buat cegah
+    // orang nebak-nebak kunci admin berkali-kali (brute-force).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS login_attempts (
+        ip VARCHAR(64) PRIMARY KEY,
+        gagal_count INT NOT NULL DEFAULT 0,
+        terakhir_gagal VARCHAR(40)
+      )
+    `);
+
     await tambahKolomJikaBelumAda("peserta", "nrp", "VARCHAR(50)");
     await tambahKolomJikaBelumAda("peserta", "jenis", "VARCHAR(10)");
     await tambahKolomJikaBelumAda("peserta", "bagian", "VARCHAR(150)");
@@ -159,6 +169,14 @@ async function initDb() {
 // pastikan semua request nunggu migrasi selesai dulu — mencegah race condition
 // di mana request pertama pas cold start bisa nyasar ke kolom yang belum ada.
 const dbSiap = initDb();
+
+// Validasi format nomor telepon Indonesia (dipakai juga di sisi server,
+// jangan cuma percaya validasi browser — orang bisa saja panggil API langsung).
+function nomorTeleponValid(nomor) {
+  const n = (nomor || "").toString().trim();
+  if (!n) return true; // boleh kosong
+  return /^(\+62|62|0)[0-9]{8,13}$/.test(n.replace(/[\s-]/g, ""));
+}
 
 const KEGIATAN_OPTIONS = [
   "Mengerjakan tugas dari pembimbing/atasan",
@@ -219,12 +237,51 @@ function menitSejakTengahMalam({ jam, menit }) {
 // GERBANG KEAMANAN: dipasang di depan endpoint yang cuma boleh diakses
 // admin. Cek kunci di ?key=... (atau header x-admin-key) harus SAMA
 // PERSIS dengan ADMIN_KEY di environment variable, kalau tidak → ditolak (401).
-function requireAdminKey(req, res, next) {
+// Juga membatasi percobaan gagal per IP (maks 10x per 15 menit) supaya
+// tidak bisa ditebak-tebak berkali-kali (brute-force).
+const MAKS_GAGAL_LOGIN = 10;
+const JENDELA_BLOKIR_MENIT = 15;
+
+async function requireAdminKey(req, res, next) {
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").toString().split(",")[0].trim();
   const key = req.query.key || req.headers["x-admin-key"];
-  if (!key || key !== ADMIN_KEY) {
-    return res.status(401).json({ error: "Kunci admin tidak valid atau belum diisi." });
+
+  try {
+    const [[catatan]] = await pool.query(`SELECT gagal_count, terakhir_gagal FROM login_attempts WHERE ip = ?`, [ip]);
+    if (catatan && catatan.gagal_count >= MAKS_GAGAL_LOGIN) {
+      const menitLalu = (Date.now() - new Date(catatan.terakhir_gagal).getTime()) / 60000;
+      if (menitLalu < JENDELA_BLOKIR_MENIT) {
+        return res.status(429).json({
+          error: `Terlalu banyak percobaan gagal. Coba lagi dalam ${Math.ceil(JENDELA_BLOKIR_MENIT - menitLalu)} menit.`,
+        });
+      }
+      // Sudah lewat jendela waktu blokir, reset hitungan
+      await pool.query(`DELETE FROM login_attempts WHERE ip = ?`, [ip]);
+    }
+
+    if (!key || key !== ADMIN_KEY) {
+      await pool.query(
+        `INSERT INTO login_attempts (ip, gagal_count, terakhir_gagal) VALUES (?, 1, ?)
+         ON DUPLICATE KEY UPDATE gagal_count = gagal_count + 1, terakhir_gagal = VALUES(terakhir_gagal)`,
+        [ip, new Date().toISOString()]
+      );
+      return res.status(401).json({ error: "Kunci admin tidak valid atau belum diisi." });
+    }
+
+    // Kunci benar -> hapus catatan gagal (kalau ada) biar counter bersih lagi
+    if (catatan) {
+      await pool.query(`DELETE FROM login_attempts WHERE ip = ?`, [ip]);
+    }
+    next();
+  } catch (err) {
+    console.error("Gagal cek rate limit login:", err);
+    // Kalau pengecekan rate limit sendiri error, tetap validasi kunci biasa
+    // supaya fitur admin tidak ikut down gara-gara bug di fitur proteksi ini.
+    if (!key || key !== ADMIN_KEY) {
+      return res.status(401).json({ error: "Kunci admin tidak valid atau belum diisi." });
+    }
+    next();
   }
-  next();
 }
 
 const wrap = (fn) => (req, res) => fn(req, res).catch((err) => {
@@ -503,6 +560,9 @@ app.post("/api/peserta", requireAdminKey, wrap(async (req, res) => {
   if (!nama_lengkap || !nama_lengkap.trim()) {
     return res.status(400).json({ error: "Nama lengkap wajib diisi." });
   }
+  if (!nomorTeleponValid(nomor_telepon)) {
+    return res.status(400).json({ error: "Format nomor telepon tidak valid." });
+  }
   try {
     const id = crypto.randomUUID();
     await pool.query(
@@ -524,6 +584,9 @@ app.post("/api/peserta", requireAdminKey, wrap(async (req, res) => {
 // jabatan, tempat, nomor telepon) — dipakai tombol "Edit" di tabel peserta.
 app.patch("/api/peserta/:id", requireAdminKey, wrap(async (req, res) => {
   const { nrp, jenis, bagian, jabatan, tempat, nomor_telepon } = req.body;
+  if (nomor_telepon !== undefined && !nomorTeleponValid(nomor_telepon)) {
+    return res.status(400).json({ error: "Format nomor telepon tidak valid." });
+  }
   const fields = [];
   const params = [];
 
@@ -544,7 +607,7 @@ app.patch("/api/peserta/:id", requireAdminKey, wrap(async (req, res) => {
   if (result.affectedRows === 0) {
     return res.status(404).json({ error: "Peserta tidak ditemukan." });
   }
-  catatAudit("edit_anggota", peserta ? peserta.nama_lengkap : null, "Data peserta diperbarui", req.query.oleh);
+  catatAudit("edit_peserta", peserta ? peserta.nama_lengkap : null, "Data peserta diperbarui", req.query.oleh);
   res.json({ ok: true });
 }));
 

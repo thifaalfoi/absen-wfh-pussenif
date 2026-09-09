@@ -9,6 +9,37 @@
     href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap"
     rel="stylesheet">
   <style>
+    /* ---- Animasi loading/spinner, dipakai tombol muat ulang & proses cek sesi ---- */
+    @keyframes putarSpinner {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .ikon-spin {
+      display: inline-block;
+      animation: putarSpinner 0.8s linear infinite;
+    }
+    .btn-loading {
+      opacity: 0.7;
+      cursor: wait !important;
+      pointer-events: none;
+    }
+    #sesiCheckOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 20000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: var(--bg, #0d1a12);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    #sesiCheckOverlay .ikon-spin {
+      font-size: 28px;
+    }
+
     :root {
       --bg: #0b1a11;
       --panel: #13271d;
@@ -895,7 +926,14 @@
   </header>
 
   <main>
-    <div id="lockedView" class="panel locked">
+    <!-- Ditampilkan sebentar saat halaman baru dibuka/di-refresh, selagi mengecek
+         apakah ada sesi login tersimpan — supaya tidak "kedip" ke layar kunci dulu. -->
+    <div id="sesiCheckOverlay">
+      <span class="ikon-spin">🔄</span>
+      <span>Memeriksa sesi...</span>
+    </div>
+
+    <div id="lockedView" class="panel locked" style="display:none">
       <div class="mark-lg">Akses Terbatas</div>
       <p style="color:var(--muted); margin-bottom:18px;">Masukkan kunci admin untuk membuka registri.</p>
       <input type="text" id="adminNamaLocked" placeholder="Nama kamu (utk catatan aktivitas)" style="width:240px; margin-bottom:8px;" /><br/>
@@ -1098,7 +1136,7 @@
     <div class="panel" style="margin-top:22px;">
       <div class="toolbar" style="justify-content:space-between;">
         <strong style="font-size:14px">Log Aktivitas Admin</strong>
-        <button class="ghost" onclick="loadAuditLog()">🔄 Muat Ulang</button>
+        <button class="ghost" id="btnMuatUlangLog" onclick="loadAuditLog()">🔄 Muat Ulang</button>
       </div>
       <div class="table-scroll">
         <table>
@@ -1271,6 +1309,10 @@
         pesertaFormStatus('Nama wajib diisi.', false);
         return;
       }
+      if (!nomorTeleponValid(nomor_telepon)) {
+        pesertaFormStatus('Format nomor WA tidak valid. Contoh yang benar: 081234567890 atau 6281234567890.', false);
+        return;
+      }
 
       try {
         const res = await fetch('/api/peserta?key=' + encodeURIComponent(adminKey) + '&oleh=' + encodeURIComponent(adminNama), {
@@ -1397,6 +1439,11 @@
 
     editPesertaSaveBtn.addEventListener('click', async () => {
       if (!editPesertaCurrentId) return;
+      if (!nomorTeleponValid(editPesertaTelepon.value)) {
+        editPesertaStatusEl.textContent = 'Format nomor WA tidak valid. Contoh yang benar: 081234567890 atau 6281234567890.';
+        editPesertaStatusEl.className = 'status err';
+        return;
+      }
       editPesertaSaveBtn.disabled = true;
       editPesertaSaveBtn.textContent = 'Menyimpan...';
       editPesertaStatusEl.textContent = '';
@@ -1504,6 +1551,14 @@
       if (n.startsWith("0")) n = "62" + n.slice(1);
       else if (!n.startsWith("62")) n = "62" + n;
       return `https://wa.me/${n}?text=${encodeURIComponent(pesan || "")}`;
+    }
+
+    // Validasi format nomor telepon Indonesia: boleh kosong (opsional), tapi
+    // kalau diisi harus angka semua (boleh diawali 0, +62, atau 62), 9-14 digit.
+    function nomorTeleponValid(nomor) {
+      const n = (nomor || "").trim();
+      if (!n) return true; // boleh kosong
+      return /^(\+62|62|0)[0-9]{8,13}$/.test(n.replace(/[\s-]/g, ""));
     }
 
     editFotoFile.addEventListener('change', () => {
@@ -1931,6 +1986,47 @@
 
         // Proses login admin: validasi kunci ke server dulu (bukan langsung
     // dipercaya), baru buka dashboard kalau benar
+    // Validasi kunci+nama ke server, lalu buka dashboard kalau benar.
+    // Dipakai baik dari tombol "Buka" manual maupun dari auto-login saat refresh.
+    async function validasiDanBukaDashboard(keyInput, namaInput, tampilkanStatusDi) {
+      try {
+        const res = await fetch('/api/audit-log?key=' + encodeURIComponent(keyInput) + '&limit=1');
+        if (res.status === 401) {
+          if (tampilkanStatusDi) { tampilkanStatusDi.textContent = 'Kunci admin salah. Coba lagi.'; tampilkanStatusDi.className = 'status err'; }
+          return false;
+        }
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          if (tampilkanStatusDi) { tampilkanStatusDi.textContent = errData.error || 'Gagal menghubungi server, coba lagi.'; tampilkanStatusDi.className = 'status err'; }
+          return false;
+        }
+      } catch (e) {
+        if (tampilkanStatusDi) { tampilkanStatusDi.textContent = 'Gagal menghubungi server: ' + e.message; tampilkanStatusDi.className = 'status err'; }
+        return false;
+      }
+
+      adminKey = keyInput;
+      adminNama = namaInput;
+      sessionStorage.setItem('absenwfh_adminKey', keyInput);
+      sessionStorage.setItem('absenwfh_adminNama', namaInput);
+
+      document.getElementById('lockStatus').textContent = '';
+      document.getElementById('lockedView').style.display = 'none';
+      document.getElementById('dashboardView').style.display = 'block';
+      document.getElementById('logoutBtn').style.display = 'inline-block';
+      document.getElementById('backupBtn').style.display = 'inline-block';
+      document.getElementById('logoutBtn').textContent = `🔒 ${adminNama} — Ganti Kunci`;
+      loadStats();
+      loadData();
+      loadPeserta();
+      loadWeeklyChart();
+      loadBelumAbsen();
+      loadAuditLog();
+      loadRekapBulanan();
+      mulaiTimerSesi();
+      return true;
+    }
+
     async function unlock() {
       const keyInput = document.getElementById('adminKeyLocked').value.trim();
       const namaInput = document.getElementById('adminNamaLocked').value.trim();
@@ -1949,47 +2045,40 @@
       }
 
       btnUnlock.disabled = true;
-      btnUnlock.textContent = 'Memeriksa...';
+      btnUnlock.innerHTML = '<span class="ikon-spin">🔄</span> Memeriksa...';
       lockStatus.textContent = '';
 
-      // Validasi kunci ke server dulu sebelum buka dashboard — jangan langsung dipercaya dari input.
-      try {
-        const res = await fetch('/api/audit-log?key=' + encodeURIComponent(keyInput) + '&limit=1');
-        if (res.status === 401) {
-          lockStatus.textContent = 'Kunci admin salah. Coba lagi.';
-          lockStatus.className = 'status err';
-          return;
-        }
-        if (!res.ok) {
-          lockStatus.textContent = 'Gagal menghubungi server, coba lagi.';
-          lockStatus.className = 'status err';
-          return;
-        }
-      } catch (e) {
-        lockStatus.textContent = 'Gagal menghubungi server: ' + e.message;
-        lockStatus.className = 'status err';
+      await validasiDanBukaDashboard(keyInput, namaInput, lockStatus);
+
+      btnUnlock.disabled = false;
+      btnUnlock.innerHTML = 'Buka';
+    }
+
+    // Begitu halaman dibuka/di-refresh, cek dulu apakah ada sesi tersimpan
+    // dari sebelumnya (di sessionStorage — otomatis hilang kalau tab ditutup).
+    // Kalau ada, coba login otomatis tanpa perlu isi ulang kunci.
+    async function cobaAutoLogin() {
+      const overlay = document.getElementById('sesiCheckOverlay');
+      const keyTersimpan = sessionStorage.getItem('absenwfh_adminKey');
+      const namaTersimpan = sessionStorage.getItem('absenwfh_adminNama');
+
+      if (!keyTersimpan || !namaTersimpan) {
+        overlay.style.display = 'none';
+        document.getElementById('lockedView').style.display = 'block';
         return;
-      } finally {
-        btnUnlock.disabled = false;
-        btnUnlock.textContent = 'Buka';
       }
 
-      adminKey = keyInput;
-      adminNama = namaInput;
-      lockStatus.textContent = '';
-      document.getElementById('lockedView').style.display = 'none';
-      document.getElementById('dashboardView').style.display = 'block';
-      document.getElementById('logoutBtn').style.display = 'inline-block';
-      document.getElementById('backupBtn').style.display = 'inline-block';
-      document.getElementById('logoutBtn').textContent = `🔒 ${adminNama} — Ganti Kunci`;
-      loadStats();
-      loadData();
-      loadPeserta();
-      loadWeeklyChart();
-      loadBelumAbsen();
-      loadAuditLog();
-      loadRekapBulanan();
+      const berhasil = await validasiDanBukaDashboard(keyTersimpan, namaTersimpan, null);
+      if (!berhasil) {
+        // Sesi tersimpan sudah tidak valid (misal kunci diganti admin lain) -> hapus & minta login ulang
+        sessionStorage.removeItem('absenwfh_adminKey');
+        sessionStorage.removeItem('absenwfh_adminNama');
+        document.getElementById('lockedView').style.display = 'block';
+      }
+      overlay.style.display = 'none';
     }
+    cobaAutoLogin();
+
     document.getElementById('adminKeyLocked').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') unlock();
     });
@@ -1998,16 +2087,54 @@
     });
 
         // Keluar dari dashboard, kembali ke layar "Akses Terbatas"
-    function logoutAdmin() {
+    function logoutAdmin(alasan) {
       adminKey = "";
       adminNama = "";
+      sessionStorage.removeItem('absenwfh_adminKey');
+      sessionStorage.removeItem('absenwfh_adminNama');
       document.getElementById('adminKeyLocked').value = '';
       document.getElementById('adminNamaLocked').value = '';
-      document.getElementById('lockStatus').textContent = '';
+      document.getElementById('lockStatus').textContent = alasan || '';
+      document.getElementById('lockStatus').className = alasan ? 'status err' : 'status';
       document.getElementById('dashboardView').style.display = 'none';
       document.getElementById('lockedView').style.display = 'block';
       document.getElementById('logoutBtn').style.display = 'none';
       document.getElementById('backupBtn').style.display = 'none';
+      hentikanTimerSesi();
+    }
+
+    // ==========================================================
+    // Auto-logout kalau admin tidak aktif selama 20 menit — mencegah
+    // sesi tetap "terbuka" kalau laptop ditinggal lupa logout manual.
+    // ==========================================================
+    const BATAS_IDLE_MENIT = 20;
+    let waktuAktivitasTerakhir = Date.now();
+    let timerSesiId = null;
+
+    function catatAktivitas() {
+      waktuAktivitasTerakhir = Date.now();
+    }
+
+    function mulaiTimerSesi() {
+      hentikanTimerSesi();
+      catatAktivitas();
+      ['click', 'keydown', 'mousemove', 'touchstart'].forEach(ev =>
+        document.addEventListener(ev, catatAktivitas, { passive: true })
+      );
+      timerSesiId = setInterval(() => {
+        const menitIdle = (Date.now() - waktuAktivitasTerakhir) / 60000;
+        if (menitIdle >= BATAS_IDLE_MENIT) {
+          logoutAdmin(`Sesi berakhir otomatis karena tidak ada aktivitas selama ${BATAS_IDLE_MENIT} menit. Silakan login lagi.`);
+        }
+      }, 30000); // cek tiap 30 detik
+    }
+
+    function hentikanTimerSesi() {
+      if (timerSesiId) clearInterval(timerSesiId);
+      timerSesiId = null;
+      ['click', 'keydown', 'mousemove', 'touchstart'].forEach(ev =>
+        document.removeEventListener(ev, catatAktivitas)
+      );
     }
 
         // Download semua data (peserta+absen+log) jadi satu file JSON
@@ -2205,12 +2332,23 @@
     async function loadAuditLog() {
       const tbody = document.getElementById('auditLogBody');
       const empty = document.getElementById('auditLogEmpty');
+      const btnMuatUlang = document.getElementById('btnMuatUlangLog');
+
+      if (btnMuatUlang) {
+        btnMuatUlang.classList.add('btn-loading');
+        btnMuatUlang.innerHTML = '<span class="ikon-spin">🔄</span> Memuat...';
+      }
       try {
         const res = await fetch('/api/audit-log?key=' + encodeURIComponent(adminKey) + '&limit=200');
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Server merespons status ${res.status}`);
+        }
         const { data } = await res.json();
         tbody.innerHTML = '';
         if (!data || data.length === 0) {
           empty.style.display = 'block';
+          empty.textContent = 'Belum ada aktivitas tercatat.';
           return;
         }
         empty.style.display = 'none';
@@ -2229,7 +2367,12 @@
         }
       } catch (e) {
         empty.style.display = 'block';
-        empty.textContent = 'Gagal memuat log aktivitas.';
+        empty.textContent = 'Gagal memuat log aktivitas: ' + e.message;
+      } finally {
+        if (btnMuatUlang) {
+          btnMuatUlang.classList.remove('btn-loading');
+          btnMuatUlang.innerHTML = '🔄 Muat Ulang';
+        }
       }
     }
 
