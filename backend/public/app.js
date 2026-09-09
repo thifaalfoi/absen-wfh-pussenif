@@ -217,8 +217,18 @@ async function loadWajahDescriptors() {
 // Mulai download model wajah + data descriptor SEJAK kamera dinyalakan,
 // biar pas foto diambil, prosesnya sudah siap (tidak nunggu lama).
 function mulaiPersiapanWajah() {
-  ensureFaceModelsLoaded();
-  if (!wajahDescriptorsLoaded) loadWajahDescriptors();
+  setWajahBadge("loading", "Menyiapkan deteksi wajah otomatis...");
+  const modelPromise = ensureFaceModelsLoaded();
+  const descriptorPromise = wajahDescriptorsLoaded ? Promise.resolve() : loadWajahDescriptors();
+
+  Promise.all([modelPromise, descriptorPromise]).then(() => {
+    // Cuma bersihkan badge kalau belum ada hasil deteksi (foto belum diambil).
+    // Kalau proses cocokkan wajah sudah jalan duluan (photo capture cepat),
+    // biarkan badge itu yang tampil, jangan ditimpa balik ke kosong.
+    if (!capturedDataUrl) {
+      setWajahBadge("", "");
+    }
+  });
 }
 
 // Coba cocokkan wajah pada foto yang baru diambil dengan daftar peserta.
@@ -739,6 +749,8 @@ btnSubmit.addEventListener("click", async () => {
   }
 
   btnSubmit.disabled = true;
+  const teksTombolAsli = btnSubmit.textContent;
+  btnSubmit.textContent = "Mengirim...";
   setStatus("Mengirim absen...", "");
 
   try {
@@ -764,6 +776,7 @@ btnSubmit.addEventListener("click", async () => {
     if (!res.ok) {
       setStatus(data.error || "Gagal mengirim absen.", "err");
       btnSubmit.disabled = false;
+      btnSubmit.textContent = teksTombolAsli;
       return;
     }
 
@@ -783,8 +796,14 @@ btnSubmit.addEventListener("click", async () => {
     } else {
       setStatus("Absen berhasil dikirim, tepat waktu. Terima kasih.", "ok");
     }
+    btnSubmit.textContent = teksTombolAsli;
   } catch (err) {
-    setStatus("Tidak bisa terhubung ke server: " + err.message, "err");
+    // Bedakan pesan error: koneksi putus vs error lain yang tidak terduga
+    const pesanError = (err instanceof TypeError)
+      ? "Koneksi internet terputus atau tidak stabil. Periksa koneksi kamu, lalu coba kirim lagi."
+      : "Terjadi kesalahan tak terduga: " + err.message;
+    setStatus(pesanError, "err");
     btnSubmit.disabled = false;
+    btnSubmit.textContent = teksTombolAsli;
   }
 });
