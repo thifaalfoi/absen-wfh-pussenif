@@ -544,7 +544,7 @@ app.patch("/api/peserta/:id", requireAdminKey, wrap(async (req, res) => {
   if (result.affectedRows === 0) {
     return res.status(404).json({ error: "Peserta tidak ditemukan." });
   }
-  catatAudit("edit_peserta", peserta ? peserta.nama_lengkap : null, "Data peserta diperbarui", req.query.oleh);
+  catatAudit("edit_anggota", peserta ? peserta.nama_lengkap : null, "Data peserta diperbarui", req.query.oleh);
   res.json({ ok: true });
 }));
 
