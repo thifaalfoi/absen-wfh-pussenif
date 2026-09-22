@@ -1036,14 +1036,25 @@ app.get("/api/rekap-bulanan", requireAdminKey, wrap(async (req, res) => {
     return res.status(400).json({ error: "Parameter bulan wajib format YYYY-MM." });
   }
 
+  // Ambil SEMUA peserta aktif dulu, supaya yang belum pernah absen sama sekali
+  // di bulan itu tetap muncul di rekap (dengan angka 0), bukan hilang begitu saja.
+  const [pesertaAktif] = await pool.query(
+    `SELECT nama_lengkap FROM peserta WHERE (status_pensiun = 'Aktif' OR status_pensiun IS NULL)`
+  );
+
+  const rekap = {};
+  for (const p of pesertaAktif) {
+    rekap[p.nama_lengkap] = { nama: p.nama_lengkap, hadir: 0, izin: 0, sakit: 0, terlambat: 0, total: 0 };
+  }
+
   const [rows] = await pool.query(
     `SELECT nama, status_kehadiran, terlambat FROM absen WHERE waktu LIKE ?`,
     [`${bulan}%`]
   );
 
-  const rekap = {};
   for (const r of rows) {
     if (!rekap[r.nama]) {
+      // Absen dari orang yang sudah dihapus/pensiun tapi datanya masih ada — tetap ditampilkan
       rekap[r.nama] = { nama: r.nama, hadir: 0, izin: 0, sakit: 0, terlambat: 0, total: 0 };
     }
     const status = r.status_kehadiran || "Hadir";
@@ -1054,7 +1065,7 @@ app.get("/api/rekap-bulanan", requireAdminKey, wrap(async (req, res) => {
     rekap[r.nama].total++;
   }
 
-  const data = Object.values(rekap).sort((a, b) => b.terlambat - a.terlambat || b.total - a.total);
+  const data = Object.values(rekap).sort((a, b) => b.terlambat - a.terlambat || b.total - a.total || a.nama.localeCompare(b.nama));
   res.json({ bulan, data });
 }));
 

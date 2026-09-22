@@ -75,6 +75,15 @@
       justify-content: space-between;
       flex-wrap: wrap;
       gap: 12px;
+      max-width: 1200px;
+      margin: 0 auto;
+      box-sizing: content-box;
+    }
+    .header-wrap {
+      border-bottom: 1px solid var(--line);
+    }
+    .header-wrap header {
+      border-bottom: none;
     }
 
     .brand {
@@ -913,17 +922,19 @@
 
   <div id="toastContainer"></div>
 
-  <header>
-    <div class="brand">
-      <img src="logo-pussenif.png" alt="Logo Pussenif" style="width:110px; height:auto; margin-bottom:18px; border-radius:8px;" />
-    </div>
-    <div style="text-align: right;">
-      <h1>Registri Absen</h1>
-      <p>Rekap kehadiran WFH — foto, waktu, dan titik lokasi tiap check-in.</p>
-      <button type="button" class="ghost" id="logoutBtn" style="display:none; margin-top:10px; font-size:12px;" onclick="logoutAdmin()">🔒 Ganti Kunci Admin</button>
-      <button type="button" class="ghost" id="backupBtn" style="display:none; margin-top:10px; margin-left:8px; font-size:12px;" onclick="downloadBackup()">💾 Backup Data</button>
-    </div>
-  </header>
+  <div class="header-wrap">
+    <header>
+      <div class="brand">
+        <img src="logo-pussenif.png" alt="Logo Pussenif" style="width:110px; height:auto; margin-bottom:18px; border-radius:8px;" />
+      </div>
+      <div style="text-align: right;">
+        <h1>Registri Absen</h1>
+        <p>Rekap kehadiran WFH — foto, waktu, dan titik lokasi tiap check-in.</p>
+        <button type="button" class="ghost" id="logoutBtn" style="display:none; margin-top:10px; font-size:12px;" onclick="logoutAdmin()">🔒 Ganti Kunci Admin</button>
+        <button type="button" class="ghost" id="backupBtn" style="display:none; margin-top:10px; margin-left:8px; font-size:12px;" onclick="downloadBackup()">💾 Backup Data</button>
+      </div>
+    </header>
+  </div>
 
   <main>
     <!-- Ditampilkan sebentar saat halaman baru dibuka/di-refresh, selagi mengecek
@@ -995,7 +1006,10 @@
       <div class="panel" style="padding:18px 22px; margin-bottom:22px;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
           <div class="chart-title" style="margin-bottom:0;">Rekap Bulanan per Orang</div>
-          <input type="month" id="rekapBulanInput" style="width:160px" onchange="loadRekapBulanan()" />
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <input type="text" id="rekapBulananSearch" placeholder="🔍 Cari nama..." style="width:180px" oninput="filterRekapBulanan()" />
+            <input type="month" id="rekapBulanInput" style="width:160px" onchange="loadRekapBulanan()" />
+          </div>
         </div>
         <div class="table-scroll">
           <table>
@@ -2147,8 +2161,9 @@
     // ==========================================================
         // Ambil & tampilkan rekap Hadir/Izin/Sakit/Terlambat per orang
     // untuk satu bulan yang dipilih
+    let rekapBulananTerbaru = [];
+
     async function loadRekapBulanan() {
-      const tbody = document.getElementById('rekapBulananBody');
       const empty = document.getElementById('rekapBulananEmpty');
       const input = document.getElementById('rekapBulanInput');
       if (!input.value) {
@@ -2158,27 +2173,39 @@
       try {
         const res = await fetch('/api/rekap-bulanan?key=' + encodeURIComponent(adminKey) + '&bulan=' + input.value);
         const { data } = await res.json();
-        tbody.innerHTML = '';
-        if (!data || data.length === 0) {
-          empty.style.display = 'block';
-          return;
-        }
-        empty.style.display = 'none';
-        for (const r of data) {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${escapeHtml(r.nama)}</td>
-            <td style="color:var(--green)">${r.hadir}</td>
-            <td style="color:var(--gold)">${r.izin}</td>
-            <td style="color:var(--red)">${r.sakit}</td>
-            <td style="${r.terlambat > 0 ? 'color:var(--red); font-weight:600;' : 'color:var(--muted);'}">${r.terlambat}</td>
-            <td>${r.total}</td>
-          `;
-          tbody.appendChild(tr);
-        }
+        rekapBulananTerbaru = data || [];
+        filterRekapBulanan();
       } catch (e) {
         empty.style.display = 'block';
         empty.textContent = 'Gagal memuat rekap bulanan.';
+      }
+    }
+
+    function filterRekapBulanan() {
+      const tbody = document.getElementById('rekapBulananBody');
+      const empty = document.getElementById('rekapBulananEmpty');
+      const q = (document.getElementById('rekapBulananSearch').value || '').trim().toLowerCase();
+
+      const data = !q ? rekapBulananTerbaru : rekapBulananTerbaru.filter(r => (r.nama || '').toLowerCase().includes(q));
+
+      tbody.innerHTML = '';
+      if (data.length === 0) {
+        empty.style.display = 'block';
+        empty.textContent = q ? `Tidak ada nama yang cocok dengan "${q}".` : 'Belum ada data untuk bulan ini.';
+        return;
+      }
+      empty.style.display = 'none';
+      for (const r of data) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(r.nama)}</td>
+          <td style="color:var(--green)">${r.hadir}</td>
+          <td style="color:var(--gold)">${r.izin}</td>
+          <td style="color:var(--red)">${r.sakit}</td>
+          <td style="${r.terlambat > 0 ? 'color:var(--red); font-weight:600;' : 'color:var(--muted);'}">${r.terlambat}</td>
+          <td>${r.total}</td>
+        `;
+        tbody.appendChild(tr);
       }
     }
 
